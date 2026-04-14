@@ -137,3 +137,33 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Turbo cache
+.turbo/
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
+# iOS / Android build artifacts
+ios/Pods/
+*.xcworkspace/
+android/.gradle/
+android/app/build/
+android/build/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Secrets (belt-and-suspenders — these must NEVER be committed)
+*.pem
+*.key
+*.p12
+*.p8
+infisical.json
+
+# IDE
+.idea/

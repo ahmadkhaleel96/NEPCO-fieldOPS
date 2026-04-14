@@ -1,0 +1,135 @@
+import { OpenAPIHono } from '@hono/zod-openapi';
+import { HTTPException } from 'hono/http-exception';
+import { ProvisionNfcTagSchema, ConfirmNfcTagInstallSchema } from '@fieldops/shared';
+import { authMiddleware, requireRole } from '../middleware/auth.middleware';
+import { supabaseAdmin } from '../lib/supabase';
+
+export const nfcTagsRoutes = new OpenAPIHono();
+
+nfcTagsRoutes.use(authMiddleware);
+
+/**
+ * POST /nfc-tags — provision a new NFC tag (admin only)
+ * Creates the nfc_tags row and generates an NTAG write password stored in Supabase Vault.
+ * The password is NEVER returned to the client — it is retrieved server-side at scan time.
+ */
+nfcTagsRoutes.post('/', requireRole('admin'), async (c) => {
+  const body = await c.req.json().catch(() => {
+    throw new HTTPException(400, { message: 'Invalid JSON body' });
+  });
+
+  const parsed = ProvisionNfcTagSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid provisioning data',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      },
+      422
+    );
+  }
+
+  const { tag_id, asset_id, vehicle_id } = parsed.data;
+  const provisionedBy = c.get('userId');
+
+  // Check tag_id is not already registered
+  const { data: existing } = await supabaseAdmin
+    .from('nfc_tags')
+    .select('id')
+    .eq('tag_id', tag_id)
+    .maybeSingle();
+
+  if (existing) {
+    throw new HTTPException(409, { message: 'This tag ID is already registered' });
+  }
+
+  // In production: generate a random 4-byte password and store in Supabase Vault.
+  // The vault_secret_id returned here is the Vault reference — not the password.
+  // For now, we store a placeholder; the actual Vault integration requires
+  // the Supabase Management API to create a vault secret.
+  const vaultSecretId = `vault:nfc:${tag_id}:${Date.now()}`;
+
+  const { data, error } = await supabaseAdmin
+    .from('nfc_tags')
+    .insert({
+      tag_id,
+      asset_id: asset_id ?? null,
+      vehicle_id: vehicle_id ?? null,
+      vault_secret_id: vaultSecretId,
+      provisioned_by: provisionedBy,
+      status: 'provisioned',
+    })
+    .select()
+    .single();
+
+  if (error) throw new HTTPException(500, { message: error.message });
+
+  return c.json({ success: true, data }, 201);
+});
+
+/** GET /nfc-tags/:id */
+nfcTagsRoutes.get('/:id', requireRole('admin', 'engineer'), async (c) => {
+  const { data, error } = await supabaseAdmin
+    .from('nfc_tags')
+    .select('*')
+    .eq('id', c.req.param('id'))
+    .single();
+
+  if (error || !data) throw new HTTPException(404, { message: 'NFC tag not found' });
+
+  // Never return the vault_secret_id to clients
+  const { vault_secret_id: _, ...safeData } = data as Record<string, unknown> & { vault_secret_id: unknown };
+
+  return c.json({ success: true, data: safeData });
+});
+
+/** PATCH /nfc-tags/:id/confirm-install — field tech confirms tag is mounted */
+nfcTagsRoutes.patch('/:id/confirm-install', requireRole('admin'), async (c) => {
+  const body = await c.req.json().catch(() => {
+    throw new HTTPException(400, { message: 'Invalid JSON body' });
+  });
+
+  const parsed = ConfirmNfcTagInstallSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid install confirmation',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      },
+      422
+    );
+  }
+
+  const { latitude, longitude, photo_url } = parsed.data;
+
+  const { data, error } = await supabaseAdmin
+    .from('nfc_tags')
+    .update({
+      status: 'active',
+      install_lat: latitude,
+      install_lng: longitude,
+      install_photo_url: photo_url,
+    })
+    .eq('id', c.req.param('id'))
+    .eq('status', 'provisioned')
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new HTTPException(404, {
+      message: 'Tag not found or not in provisioned state',
+    });
+  }
+
+  const { vault_secret_id: _, ...safeData } = data as Record<string, unknown> & { vault_secret_id: unknown };
+
+  return c.json({ success: true, data: safeData });
+});
