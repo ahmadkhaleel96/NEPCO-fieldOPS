@@ -65,6 +65,7 @@ export const Typography = StyleSheet.create({
   },
   mono: {
     fontSize: 13,
+    lineHeight: 20,
     fontFamily: 'monospace',
     color: Colors.neutral800,
   },

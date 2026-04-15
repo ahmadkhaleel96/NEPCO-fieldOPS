@@ -2,10 +2,10 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import { authRateLimitMiddleware } from '../middleware/rate-limit.middleware';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAnon } from '../lib/supabase';
 
-export const authRoutes = new OpenAPIHono();
+export const authRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 const SignInSchema = z.object({
   email: z.string().email(),

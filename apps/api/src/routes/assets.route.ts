@@ -1,10 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { CreateAssetSchema, UpdateAssetSchema, PaginationQuerySchema } from '@fieldops/shared';
-import { authMiddleware, requireRole } from '../middleware/auth.middleware';
+import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 
-export const assetsRoutes = new OpenAPIHono();
+export const assetsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 assetsRoutes.use(authMiddleware);
 

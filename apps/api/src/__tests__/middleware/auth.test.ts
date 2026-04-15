@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware';
+import { errorHandler } from '../../middleware/error.middleware';
 
 // Mock Supabase so we don't need live credentials in tests
 vi.mock('../../lib/supabase', () => ({
@@ -45,6 +46,8 @@ function makeTestApp() {
   app.use('/engineer-or-admin/*', authMiddleware, requireRole('admin', 'engineer'));
   app.get('/engineer-or-admin/data', (c) => c.json({ ok: true }));
 
+  app.onError(errorHandler);
+
   return app;
 }
 
@@ -60,7 +63,7 @@ describe('authMiddleware', () => {
     const res = await app.request('/protected/hello');
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.message).toMatch(/authorization/i);
+    expect(body.error.message).toMatch(/authorization/i);
   });
 
   it('returns 401 when token is not Bearer format', async () => {
@@ -167,7 +170,7 @@ describe('requireRole', () => {
     });
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.message).toMatch(/access denied/i);
+    expect(body.error.message).toMatch(/access denied/i);
   });
 
   it('allows engineer to access engineer-or-admin route', async () => {

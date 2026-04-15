@@ -1,10 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { StartTripSchema, PostTripLocationsSchema } from '@fieldops/shared';
-import { authMiddleware, requireRole } from '../middleware/auth.middleware';
+import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 
-export const tripsRoutes = new OpenAPIHono();
+export const tripsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 tripsRoutes.use(authMiddleware);
 

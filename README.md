@@ -277,13 +277,14 @@ Coverage reports are generated in each workspace's `coverage/` directory.
 
 ## Sprint Log
 
-### Sprint 0 — Phase 0: Foundation & Security Baseline ✅ (2026-04-14)
+### Sprint 0 — Phase 0: Foundation & Security Baseline ✅ (2026-04-15)
 
 - [x] **0.1** Threat model (OWASP/STRIDE) → `docs/threat-model.md`
 - [x] **0.2** Turborepo monorepo: `apps/web`, `apps/mobile`, `apps/api`, `packages/shared`, `packages/api-client`
 - [x] **0.3** Database migrations 001–018 (all tables, RLS policies, triggers, auth hook)
 - [x] **0.4** Auth middleware (JWT validation, role extraction, `requireRole` guard)
 - [x] **0.5** Hono API skeleton: all route stubs with Zod validation, rate limiting, structured logging, error handling
+- [x] **0.6** All test suites green (shared 140 tests, API 21 tests, web 3 tests, mobile 9 tests); zero TypeScript errors across all workspaces
 
 **Next sprint: Phase 1 — Core Data & Identity**
 - 1.1 Admin panel: user management UI

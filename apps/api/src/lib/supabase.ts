@@ -18,7 +18,7 @@ export const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
-    detectSessionFromUrl: false,
+    detectSessionInUrl: false,
   },
 });
 
@@ -31,6 +31,6 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
-    detectSessionFromUrl: false,
+    detectSessionInUrl: false,
   },
 });

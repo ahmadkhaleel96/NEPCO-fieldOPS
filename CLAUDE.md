@@ -238,3 +238,19 @@ Full build plan: see `plan.pdf` (provided by project owner).
 | `docs/threat-model.md` | OWASP/STRIDE threat analysis — review before major features |
 | `infra/migrations/017_create_rls_policies.sql` | Row-Level Security policies |
 | `infra/migrations/013_create_asset_history.sql` | Append-only trigger + approval automation |
+
+---
+
+## Known Dependency Constraints
+
+### React version pinning
+
+`react-native@0.74.x` hard-pins `react@18.2.0` as a direct dependency, which npm hoists to the root `node_modules`. All workspaces must use `react@18.2.0` (and `react-dom@18.2.0`) to avoid dual-instance errors. **Do not upgrade React in `apps/web` to `18.3.x` or later** without first removing `react-native` from the root dedupe constraint.
+
+### Vitest React deduplication (`apps/web`)
+
+`apps/web/vitest.config.ts` uses `resolve.alias` + `resolve.dedupe` + `server.deps.inline` to ensure `@tanstack/react-query` and the test environment share a single React instance. If you see `TypeError: Cannot read properties of null (reading 'useEffect')` in web tests, it is a dual-React-instance problem — check that the alias paths in `vitest.config.ts` still point to the correct local `node_modules/react` copy.
+
+### Hono context typing
+
+Every `OpenAPIHono` router that uses `authMiddleware` must be typed as `new OpenAPIHono<{ Variables: AuthVariables }>()`. Without this, `c.get('userId')` and `c.get('userRole')` will fail TypeScript type-checking. `AuthVariables` is exported from `apps/api/src/middleware/auth.middleware.ts`.

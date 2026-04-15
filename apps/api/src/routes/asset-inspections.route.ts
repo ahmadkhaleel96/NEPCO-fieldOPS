@@ -1,10 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { SubmitInspectionSchema, CreateSafetyReportSchema } from '@fieldops/shared';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 
-export const assetInspectionsRoutes = new OpenAPIHono();
+export const assetInspectionsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 assetInspectionsRoutes.use(authMiddleware);
 

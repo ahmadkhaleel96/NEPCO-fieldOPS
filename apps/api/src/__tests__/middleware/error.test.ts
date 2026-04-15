@@ -9,17 +9,19 @@ function makeApp() {
 
   app.get('/throw-http/:code', (c) => {
     const code = parseInt(c.req.param('code'), 10);
-    throw new HTTPException(code as Parameters<typeof HTTPException>[0], {
+    throw new HTTPException(code as ConstructorParameters<typeof HTTPException>[0], {
       message: `Error ${code}`,
     });
   });
 
-  app.get('/throw-zod', () => {
+  app.get('/throw-zod', (c) => {
     const schema = z.object({ name: z.string() });
     schema.parse({});
+    return c.json({});
   });
 
-  app.get('/throw-unknown', () => {
+  app.get('/throw-unknown', (c) => {
+    void c;
     throw new Error('Unexpected error');
   });
 

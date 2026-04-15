@@ -23,7 +23,7 @@ export const CreateUserSchema = z.object({
   role: UserRoleSchema,
   phone: z
     .string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number (E.164 format expected)')
+    .regex(/^\+[1-9]\d{6,14}$/, 'Invalid phone number (E.164 format expected)')
     .optional(),
 });
 

@@ -5,10 +5,10 @@ import {
   WithdrawPermitSchema,
   PaginationQuerySchema,
 } from '@fieldops/shared';
-import { authMiddleware, requireRole } from '../middleware/auth.middleware';
+import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 
-export const workPermitsRoutes = new OpenAPIHono();
+export const workPermitsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 workPermitsRoutes.use(authMiddleware);
 

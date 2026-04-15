@@ -1,10 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { PaginationQuerySchema } from '@fieldops/shared';
-import { authMiddleware, requireRole } from '../middleware/auth.middleware';
+import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 
-export const reportsRoutes = new OpenAPIHono();
+export const reportsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 reportsRoutes.use(authMiddleware);
 reportsRoutes.use(requireRole('admin', 'engineer'));
