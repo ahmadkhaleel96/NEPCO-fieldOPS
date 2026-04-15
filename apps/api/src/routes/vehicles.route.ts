@@ -122,3 +122,20 @@ vehiclesRoutes.patch('/:id', requireRole('admin', 'engineer'), async (c) => {
 
   return c.json({ success: true, data });
 });
+
+/** DELETE /vehicles/:id — soft delete */
+vehiclesRoutes.delete('/:id', requireRole('admin'), async (c) => {
+  const id = c.req.param('id');
+
+  const { data, error } = await supabaseAdmin
+    .from('vehicles')
+    .update({ is_active: false })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new HTTPException(500, { message: error.message });
+  if (!data) throw new HTTPException(404, { message: 'Vehicle not found' });
+
+  return c.json({ success: true, data });
+});

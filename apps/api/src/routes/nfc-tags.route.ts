@@ -1,12 +1,47 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
-import { ProvisionNfcTagSchema, ConfirmNfcTagInstallSchema } from '@fieldops/shared';
+import { ProvisionNfcTagSchema, ConfirmNfcTagInstallSchema, PaginationQuerySchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 
 export const nfcTagsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
 nfcTagsRoutes.use(authMiddleware);
+
+/** GET /nfc-tags — list all tags (admin, engineer) */
+nfcTagsRoutes.get('/', requireRole('admin', 'engineer'), async (c) => {
+  const query = PaginationQuerySchema.parse({
+    page: c.req.query('page'),
+    per_page: c.req.query('per_page'),
+  });
+  const statusFilter = c.req.query('status');
+  const from = (query.page - 1) * query.per_page;
+  const to = from + query.per_page - 1;
+
+  let q = supabaseAdmin
+    .from('nfc_tags')
+    .select('id, tag_id, status, asset_id, vehicle_id, provisioned_by, replaced_by, install_lat, install_lng, install_photo_url, created_at, updated_at', { count: 'exact' })
+    .range(from, to)
+    .order('created_at', { ascending: false });
+
+  if (statusFilter) {
+    q = q.eq('status', statusFilter);
+  }
+
+  const { data, count, error } = await q;
+  if (error) throw new HTTPException(500, { message: error.message });
+
+  return c.json({
+    success: true,
+    data,
+    pagination: {
+      total: count ?? 0,
+      page: query.page,
+      per_page: query.per_page,
+      total_pages: Math.ceil((count ?? 0) / query.per_page),
+    },
+  });
+});
 
 /**
  * POST /nfc-tags — provision a new NFC tag (admin only)

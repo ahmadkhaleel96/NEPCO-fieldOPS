@@ -149,3 +149,20 @@ assetsRoutes.patch('/:id', requireRole('admin', 'engineer'), async (c) => {
 
   return c.json({ success: true, data });
 });
+
+/** DELETE /assets/:id — soft delete (set is_active = false) */
+assetsRoutes.delete('/:id', requireRole('admin'), async (c) => {
+  const id = c.req.param('id');
+
+  const { data, error } = await supabaseAdmin
+    .from('assets')
+    .update({ is_active: false })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new HTTPException(500, { message: error.message });
+  if (!data) throw new HTTPException(404, { message: 'Asset not found' });
+
+  return c.json({ success: true, data });
+});

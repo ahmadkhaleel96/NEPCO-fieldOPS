@@ -18,7 +18,7 @@ export default defineConfig({
     setupFiles: ['./src/__tests__/setup.ts'],
     server: {
       deps: {
-        inline: ['@tanstack/react-query', '@tanstack/react-query-devtools'],
+        inline: ['@tanstack/react-query', '@tanstack/react-query-devtools', 'react-hook-form'],
       },
     },
     include: ['src/**/__tests__/**/*.test.{ts,tsx}'],

@@ -17,5 +17,28 @@
  * once the full OpenAPI spec is finalized.
  */
 
-export { ApiClient } from './client';
-export type { ApiClientConfig } from './client';
+export { ApiClient, ApiError } from './client';
+export type {
+  ApiClientConfig,
+  ApiClientUser,
+  CreateUserPayload,
+  UpdateUserPayload,
+  ApiClientNfcTag,
+  NfcTagStatus,
+  ProvisionNfcTagPayload,
+  ConfirmInstallPayload,
+  ApiClientVehicle,
+  CreateVehiclePayload,
+  UpdateVehiclePayload,
+  ApiClientAsset,
+  AssetType,
+  CreateAssetPayload,
+  UpdateAssetPayload,
+  PaginatedResponse,
+  ApiClientWorkPermit,
+  ApiClientWorkPermitDetail,
+  WorkPermitStatus,
+  WorkPermitType,
+  CreateWorkPermitPayload,
+  WithdrawPermitPayload,
+} from './client';
