@@ -125,6 +125,23 @@ vi.mock('../lib/api-client', () => ({
       get: vi.fn(),
       submit: vi.fn(),
     },
+    followUpTasks: {
+      list: vi.fn().mockResolvedValue({
+        success: true,
+        data: [],
+        pagination: { total: 0, page: 1, per_page: 20, total_pages: 0 },
+      }),
+      get: vi.fn(),
+      resolve: vi.fn(),
+    },
+    safetyReports: {
+      list: vi.fn().mockResolvedValue({
+        success: true,
+        data: [],
+        pagination: { total: 0, page: 1, per_page: 20, total_pages: 0 },
+      }),
+      get: vi.fn(),
+    },
   },
 }));
 

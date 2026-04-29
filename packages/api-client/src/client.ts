@@ -459,6 +459,39 @@ export class ApiClient {
     };
   }
 
+  get followUpTasks() {
+    return {
+      list: (params?: { page?: number; per_page?: number; asset_id?: string; resolved?: boolean }) => {
+        const qs = new URLSearchParams();
+        if (params?.page) qs.set('page', String(params.page));
+        if (params?.per_page) qs.set('per_page', String(params.per_page));
+        if (params?.asset_id) qs.set('asset_id', params.asset_id);
+        if (params?.resolved !== undefined) qs.set('resolved', String(params.resolved));
+        const query = qs.toString() ? `?${qs.toString()}` : '';
+        return this.request<PaginatedResponse<ApiClientFollowUpTask>>('GET', `/follow-up-tasks${query}`);
+      },
+      get: (id: string) =>
+        this.request<{ success: true; data: ApiClientFollowUpTask }>('GET', `/follow-up-tasks/${id}`),
+      resolve: (id: string, payload: ResolveFollowUpTaskPayload) =>
+        this.request<{ success: true; data: ApiClientFollowUpTask }>('PATCH', `/follow-up-tasks/${id}/resolve`, payload),
+    };
+  }
+
+  get safetyReports() {
+    return {
+      list: (params?: { page?: number; per_page?: number; trip_id?: string }) => {
+        const qs = new URLSearchParams();
+        if (params?.page) qs.set('page', String(params.page));
+        if (params?.per_page) qs.set('per_page', String(params.per_page));
+        if (params?.trip_id) qs.set('trip_id', params.trip_id);
+        const query = qs.toString() ? `?${qs.toString()}` : '';
+        return this.request<PaginatedResponse<ApiClientSafetyReport>>('GET', `/safety-reports${query}`);
+      },
+      get: (id: string) =>
+        this.request<{ success: true; data: ApiClientSafetyReport }>('GET', `/safety-reports/${id}`),
+    };
+  }
+
   get users() {
     return {
       list: (params?: { page?: number; per_page?: number }) => {
@@ -522,6 +555,33 @@ export interface ApiClientAssetChange {
 export interface ReviewChangePayload {
   action: 'approve' | 'reject';
   notes?: string;
+}
+
+export interface ApiClientFollowUpTask {
+  id: string;
+  inspection_id: string;
+  asset_id: string;
+  assigned_to: string | null;
+  partial_form_data: Record<string, unknown>;
+  notes: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResolveFollowUpTaskPayload {
+  notes?: string;
+}
+
+export interface ApiClientSafetyReport {
+  id: string;
+  report_number: string;
+  inspection_id: string;
+  trip_id: string;
+  reported_by: string;
+  hazard_description: string;
+  photo_urls: string[];
+  created_at: string;
 }
 
 export class ApiError extends Error {

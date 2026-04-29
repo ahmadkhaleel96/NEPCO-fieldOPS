@@ -240,11 +240,53 @@ tripsRoutes.post('/:id/end', requireRole('driver', 'admin'), async (c) => {
     throw new HTTPException(409, { message: 'Trip not found or already ended' });
   }
 
+  const closedTrip = data as { id: string; permit_id: string; vehicle_id: string; driver_id: string };
+
+  // Log trip_end NFC event using the vehicle's active tag (best-effort)
+  const { data: nfcTag } = await supabaseAdmin
+    .from('nfc_tags')
+    .select('tag_id')
+    .eq('vehicle_id', closedTrip.vehicle_id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (nfcTag) {
+    await supabaseAdmin.from('nfc_events').insert({
+      tag_id: (nfcTag as { tag_id: string }).tag_id,
+      event_type: 'trip_end',
+      trip_id: tripId,
+      permit_id: closedTrip.permit_id,
+      user_id: closedTrip.driver_id,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
+      client_id: crypto.randomUUID(),
+      client_timestamp: new Date().toISOString(),
+    });
+  }
+
+  // Create follow-up tasks for incomplete/deferred inspections
+  const { data: incompleteInspections } = await supabaseAdmin
+    .from('asset_inspections')
+    .select('id, asset_id, form_data')
+    .eq('trip_id', tripId)
+    .in('status', ['incomplete', 'deferred']);
+
+  if (incompleteInspections && (incompleteInspections as unknown[]).length > 0) {
+    const tasks = (incompleteInspections as Array<{ id: string; asset_id: string; form_data: Record<string, unknown> }>).map(
+      (insp) => ({
+        inspection_id: insp.id,
+        asset_id: insp.asset_id,
+        partial_form_data: insp.form_data,
+      })
+    );
+    await supabaseAdmin.from('follow_up_tasks').insert(tasks);
+  }
+
   // Advance permit to completed
   await supabaseAdmin
     .from('work_permits')
     .update({ status: 'completed' })
-    .eq('id', (data as { permit_id: string }).permit_id);
+    .eq('id', closedTrip.permit_id);
 
   return c.json({ success: true, data });
 });

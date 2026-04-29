@@ -410,4 +410,59 @@ describe('POST /trips/:id/end', () => {
     });
     expect(res.status).toBe(409);
   });
+
+  it('logs trip_end NFC event when active vehicle tag is found', async () => {
+    mockAuthUser('driver');
+    const closedTrip = { ...MOCK_TRIP, end_time: '2026-04-20T16:00:00.000Z', permit_id: V2 };
+    const nfcTagRow = { tag_id: 'ABCD1234' };
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))          // open inspections
+      .mockReturnValueOnce(from(makeChain({ data: closedTrip, error: null })))  // update trip
+      .mockReturnValueOnce(from(makeChain({ data: nfcTagRow, error: null })))   // nfc_tags lookup
+      .mockReturnValueOnce(from(makeChain({ data: null, error: null })))        // nfc_events insert
+      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))          // incomplete inspections
+      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));       // update permit
+
+    const app = makeApp();
+    const res = await app.request('/trips/trip-1/end', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('creates follow-up tasks for incomplete and deferred inspections', async () => {
+    mockAuthUser('driver');
+    const closedTrip = { ...MOCK_TRIP, end_time: '2026-04-20T16:00:00.000Z', permit_id: V2 };
+    const incompleteInspections = [
+      { id: 'insp-1', asset_id: 'asset-1', form_data: { condition: 'fair' } },
+      { id: 'insp-2', asset_id: 'asset-2', form_data: {} },
+    ];
+
+    const followUpChain = makeChain({ data: null, error: null });
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))                    // open inspections
+      .mockReturnValueOnce(from(makeChain({ data: closedTrip, error: null })))            // update trip
+      .mockReturnValueOnce(from(makeChain({ data: null, error: null })))                  // nfc_tags (no tag)
+      .mockReturnValueOnce(from(makeChain({ data: incompleteInspections, error: null }))) // incomplete inspections
+      .mockReturnValueOnce(from(followUpChain))                                           // follow_up_tasks insert
+      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));                 // update permit
+
+    const app = makeApp();
+    const res = await app.request('/trips/trip-1/end', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
+    });
+    expect(res.status).toBe(200);
+    expect(followUpChain.insert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ inspection_id: 'insp-1', asset_id: 'asset-1' }),
+        expect.objectContaining({ inspection_id: 'insp-2', asset_id: 'asset-2' }),
+      ])
+    );
+  });
 });

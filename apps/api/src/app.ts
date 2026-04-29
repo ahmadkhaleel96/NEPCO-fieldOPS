@@ -15,6 +15,8 @@ import { nfcEventsRoutes } from './routes/nfc-events.route';
 import { assetInspectionsRoutes } from './routes/asset-inspections.route';
 import { assetChangesRoutes } from './routes/asset-changes.route';
 import { reportsRoutes } from './routes/reports.route';
+import { followUpTasksRoutes } from './routes/follow-up-tasks.route';
+import { safetyReportsRoutes } from './routes/safety-reports.route';
 
 export function createApp() {
   const app = new OpenAPIHono();
@@ -68,6 +70,8 @@ export function createApp() {
   app.route('/asset-inspections', assetInspectionsRoutes);
   app.route('/asset-changes', assetChangesRoutes);
   app.route('/reports', reportsRoutes);
+  app.route('/follow-up-tasks', followUpTasksRoutes);
+  app.route('/safety-reports', safetyReportsRoutes);
 
   // ----------------------------------------------------------------
   // OpenAPI documentation (available in non-production only)

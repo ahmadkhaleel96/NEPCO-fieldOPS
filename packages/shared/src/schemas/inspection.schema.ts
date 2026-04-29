@@ -120,3 +120,23 @@ export const SafetyReportSchema = z.object({
 });
 
 export type SafetyReport = z.infer<typeof SafetyReportSchema>;
+
+export const FollowUpTaskSchema = z.object({
+  id: z.string().uuid(),
+  inspection_id: z.string().uuid(),
+  asset_id: z.string().uuid(),
+  assigned_to: z.string().uuid().nullable(),
+  partial_form_data: z.record(z.unknown()),
+  notes: z.string().nullable(),
+  resolved_at: z.string().datetime().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+
+export type FollowUpTask = z.infer<typeof FollowUpTaskSchema>;
+
+export const ResolveFollowUpTaskSchema = z.object({
+  notes: z.string().max(500).optional(),
+});
+
+export type ResolveFollowUpTask = z.infer<typeof ResolveFollowUpTaskSchema>;

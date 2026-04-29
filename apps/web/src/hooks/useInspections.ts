@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ApprovalStatus, ReviewChangePayload } from '@fieldops/api-client';
+import type { ApprovalStatus, ReviewChangePayload, ResolveFollowUpTaskPayload } from '@fieldops/api-client';
 import { apiClient } from '../lib/api-client';
 
 export function useAssetChanges(params?: {
@@ -33,5 +33,39 @@ export function useAssetInspections(params?: {
   return useQuery({
     queryKey: ['assetInspections', params],
     queryFn: () => apiClient.assetInspections.list(params),
+  });
+}
+
+export function useFollowUpTasks(params?: {
+  page?: number;
+  per_page?: number;
+  asset_id?: string;
+  resolved?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['followUpTasks', params],
+    queryFn: () => apiClient.followUpTasks.list(params),
+  });
+}
+
+export function useResolveFollowUpTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: ResolveFollowUpTaskPayload }) =>
+      apiClient.followUpTasks.resolve(id, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['followUpTasks'] });
+    },
+  });
+}
+
+export function useSafetyReports(params?: {
+  page?: number;
+  per_page?: number;
+  trip_id?: string;
+}) {
+  return useQuery({
+    queryKey: ['safetyReports', params],
+    queryFn: () => apiClient.safetyReports.list(params),
   });
 }

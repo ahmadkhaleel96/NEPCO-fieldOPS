@@ -57,4 +57,7 @@ export type {
   ApiClientAssetChange,
   ReviewChangePayload,
   ApprovalStatus,
+  ApiClientFollowUpTask,
+  ResolveFollowUpTaskPayload,
+  ApiClientSafetyReport,
 } from './client';
