@@ -8,6 +8,39 @@ export const assetChangesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>(
 
 assetChangesRoutes.use(authMiddleware);
 
+/** GET /asset-changes — list with optional status and asset_id filters (admin/engineer only) */
+assetChangesRoutes.get('/', requireRole('admin', 'engineer'), async (c) => {
+  const page = Math.max(1, Number(c.req.query('page') ?? 1));
+  const perPage = Math.min(100, Math.max(1, Number(c.req.query('per_page') ?? 20)));
+  const status = c.req.query('status');
+  const assetId = c.req.query('asset_id');
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  let q = supabaseAdmin
+    .from('asset_changes')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (status) q = q.eq('status', status);
+  if (assetId) q = q.eq('asset_id', assetId);
+
+  const { data, error, count } = await q;
+  if (error) throw new HTTPException(500, { message: error.message });
+
+  return c.json({
+    success: true,
+    data: data ?? [],
+    pagination: {
+      total: count ?? 0,
+      page,
+      per_page: perPage,
+      total_pages: Math.ceil((count ?? 0) / perPage),
+    },
+  });
+});
+
 /**
  * PATCH /asset-changes/:id/approve — engineer approves a field change
  *

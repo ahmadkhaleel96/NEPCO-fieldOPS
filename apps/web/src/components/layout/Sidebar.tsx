@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/vehicles', label: 'Vehicles', roles: ['admin', 'engineer', 'team_leader'] },
   { to: '/nfc-tags', label: 'NFC Tags', roles: ['admin'] },
   { to: '/work-permits', label: 'Work Permits', roles: ['admin', 'engineer'] },
+  { to: '/inspections', label: 'Inspections', roles: ['admin', 'engineer'] },
   { to: '/users', label: 'Users', roles: ['admin'] },
 ];
 

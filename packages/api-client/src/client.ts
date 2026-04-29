@@ -168,7 +168,16 @@ export interface ApiClientWorkPermitDetail extends ApiClientWorkPermit {
     withdrawal_reason: string | null;
     created_at: string;
   }>;
-  permit_assets: Array<{ asset_id: string }>;
+  permit_assets: Array<{
+    asset_id: string;
+    assets: {
+      id: string;
+      asset_code: string;
+      name: string;
+      asset_type: AssetType;
+      metadata: Record<string, unknown>;
+    } | null;
+  }>;
 }
 
 export interface CreateWorkPermitPayload {
@@ -187,6 +196,70 @@ export interface CreateWorkPermitPayload {
 
 export interface WithdrawPermitPayload {
   reason: string;
+}
+
+export type NfcEventType = 'vehicle_start' | 'site_arrival' | 'trip_end' | 'permit_withdrawal';
+
+export interface ApiClientTrip {
+  id: string;
+  permit_id: string;
+  driver_id: string;
+  vehicle_id: string;
+  start_time: string;
+  end_time: string | null;
+  start_lat: number;
+  start_lng: number;
+  end_lat: number | null;
+  end_lng: number | null;
+  client_id: string;
+  created_at: string;
+}
+
+export interface StartTripPayload {
+  tag_id: string;
+  permit_id: string;
+  lat: number;
+  lng: number;
+  client_id: string;
+  client_timestamp: string;
+}
+
+export interface TripLocationPoint {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  captured_at: string;
+  client_id: string;
+}
+
+export interface PostTripLocationsPayload {
+  locations: TripLocationPoint[];
+}
+
+export interface EndTripPayload {
+  lat?: number;
+  lng?: number;
+}
+
+export interface TripTrack {
+  type: 'LineString';
+  coordinates: [number, number][];
+  has_gaps: boolean;
+}
+
+export interface SiteArrivalPayload {
+  tag_id: string;
+  trip_id: string;
+  lat: number;
+  lng: number;
+  client_id: string;
+  client_timestamp: string;
+}
+
+export interface SiteArrivalResponse {
+  event_id: string;
+  asset_id: string;
+  permit_id: string;
 }
 
 /**
@@ -302,6 +375,30 @@ export class ApiClient {
     };
   }
 
+  get trips() {
+    return {
+      start: (payload: StartTripPayload) =>
+        this.request<{ success: true; data: ApiClientTrip }>('POST', '/trips', payload),
+      postLocations: (id: string, payload: PostTripLocationsPayload) =>
+        this.request<{ success: true; data: { inserted: number } }>(
+          'POST',
+          `/trips/${id}/locations`,
+          payload
+        ),
+      getTrack: (id: string) =>
+        this.request<{ success: true; data: TripTrack }>('GET', `/trips/${id}/track`),
+      end: (id: string, payload: EndTripPayload) =>
+        this.request<{ success: true; data: ApiClientTrip }>('POST', `/trips/${id}/end`, payload),
+    };
+  }
+
+  get nfcEvents() {
+    return {
+      recordArrival: (payload: SiteArrivalPayload) =>
+        this.request<{ success: true; data: SiteArrivalResponse }>('POST', '/nfc-events', payload),
+    };
+  }
+
   get workPermits() {
     return {
       list: (params?: { page?: number; per_page?: number; status?: WorkPermitStatus }) => {
@@ -318,6 +415,47 @@ export class ApiClient {
         this.request<{ success: true; data: ApiClientWorkPermit }>('POST', '/work-permits', payload),
       withdraw: (id: string, payload: WithdrawPermitPayload) =>
         this.request<{ success: true; data: ApiClientWorkPermit }>('POST', `/work-permits/${id}/withdraw`, payload),
+    };
+  }
+
+  get assetInspections() {
+    return {
+      list: (params?: { page?: number; per_page?: number; status?: InspectionStatus; trip_id?: string }) => {
+        const qs = new URLSearchParams();
+        if (params?.page) qs.set('page', String(params.page));
+        if (params?.per_page) qs.set('per_page', String(params.per_page));
+        if (params?.status) qs.set('status', params.status);
+        if (params?.trip_id) qs.set('trip_id', params.trip_id);
+        const query = qs.toString() ? `?${qs.toString()}` : '';
+        return this.request<PaginatedResponse<ApiClientAssetInspection>>('GET', `/asset-inspections${query}`);
+      },
+      get: (id: string) =>
+        this.request<{ success: true; data: ApiClientAssetInspection & { asset_changes: ApiClientAssetChange[] } }>(
+          'GET',
+          `/asset-inspections/${id}`
+        ),
+      submit: (payload: SubmitInspectionPayload) =>
+        this.request<{ success: true; data: ApiClientAssetInspection }>('POST', '/asset-inspections', payload),
+    };
+  }
+
+  get assetChanges() {
+    return {
+      list: (params?: { page?: number; per_page?: number; status?: ApprovalStatus; asset_id?: string }) => {
+        const qs = new URLSearchParams();
+        if (params?.page) qs.set('page', String(params.page));
+        if (params?.per_page) qs.set('per_page', String(params.per_page));
+        if (params?.status) qs.set('status', params.status);
+        if (params?.asset_id) qs.set('asset_id', params.asset_id);
+        const query = qs.toString() ? `?${qs.toString()}` : '';
+        return this.request<PaginatedResponse<ApiClientAssetChange>>('GET', `/asset-changes${query}`);
+      },
+      review: (id: string, payload: ReviewChangePayload) =>
+        this.request<{ success: true; data: ApiClientAssetChange; warning?: string }>(
+          'PATCH',
+          `/asset-changes/${id}/approve`,
+          payload
+        ),
     };
   }
 
@@ -340,6 +478,50 @@ export class ApiClient {
         this.request<{ success: true; data: ApiClientUser }>('DELETE', `/users/${id}`),
     };
   }
+}
+
+export type InspectionStatus = 'open' | 'pending' | 'incomplete' | 'deferred';
+export type IncompleteReason = 'device_failure' | 'safety_hazard' | 'access_restricted' | 'equipment_missing';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ApiClientAssetInspection {
+  id: string;
+  trip_id: string;
+  asset_id: string;
+  submitted_by: string;
+  status: InspectionStatus;
+  form_data: Record<string, unknown>;
+  incomplete_reason: IncompleteReason | null;
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubmitInspectionPayload {
+  trip_id: string;
+  asset_id: string;
+  status: InspectionStatus;
+  form_data: Record<string, unknown>;
+  incomplete_reason?: IncompleteReason;
+  idempotency_key: string;
+}
+
+export interface ApiClientAssetChange {
+  id: string;
+  inspection_id: string;
+  asset_id: string;
+  field_name: string;
+  old_value: unknown;
+  new_value: unknown;
+  status: ApprovalStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface ReviewChangePayload {
+  action: 'approve' | 'reject';
+  notes?: string;
 }
 
 export class ApiError extends Error {

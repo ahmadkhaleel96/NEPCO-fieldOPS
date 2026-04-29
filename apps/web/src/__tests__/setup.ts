@@ -108,6 +108,23 @@ vi.mock('../lib/api-client', () => ({
       update: vi.fn(),
       deactivate: vi.fn(),
     },
+    assetChanges: {
+      list: vi.fn().mockResolvedValue({
+        success: true,
+        data: [],
+        pagination: { total: 0, page: 1, per_page: 20, total_pages: 0 },
+      }),
+      review: vi.fn(),
+    },
+    assetInspections: {
+      list: vi.fn().mockResolvedValue({
+        success: true,
+        data: [],
+        pagination: { total: 0, page: 1, per_page: 20, total_pages: 0 },
+      }),
+      get: vi.fn(),
+      submit: vi.fn(),
+    },
   },
 }));
 

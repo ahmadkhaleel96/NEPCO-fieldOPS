@@ -121,7 +121,7 @@ workPermitsRoutes.get('/:id', async (c) => {
 
   const { data: permit, error } = await supabaseAdmin
     .from('work_permits')
-    .select('*, permit_members(*), permit_assets(asset_id)')
+    .select('*, permit_members(*), permit_assets(asset_id, assets(id, asset_code, name, asset_type, metadata))')
     .eq('id', id)
     .single();
 

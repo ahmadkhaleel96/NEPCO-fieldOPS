@@ -9,6 +9,7 @@ import { AssetsPage } from './pages/AssetsPage';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { NfcTagsPage } from './pages/NfcTagsPage';
 import { WorkPermitsPage } from './pages/WorkPermitsPage';
+import { InspectionsPage } from './pages/InspectionsPage';
 import styles from './styles/App.module.css';
 
 export function App() {
@@ -78,6 +79,9 @@ export function App() {
           )}
           {(userRole === 'admin' || userRole === 'engineer') && (
             <Route path="work-permits" element={<WorkPermitsPage />} />
+          )}
+          {(userRole === 'admin' || userRole === 'engineer') && (
+            <Route path="inspections" element={<InspectionsPage />} />
           )}
           {userRole === 'admin' && (
             <Route path="users" element={<UsersPage />} />

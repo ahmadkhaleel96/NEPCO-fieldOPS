@@ -128,6 +128,39 @@ assetInspectionsRoutes.post('/', async (c) => {
   return c.json({ success: true, data: inspection }, 201);
 });
 
+/** GET /asset-inspections — list with optional status and trip_id filters */
+assetInspectionsRoutes.get('/', async (c) => {
+  const page = Math.max(1, Number(c.req.query('page') ?? 1));
+  const perPage = Math.min(100, Math.max(1, Number(c.req.query('per_page') ?? 20)));
+  const status = c.req.query('status');
+  const tripId = c.req.query('trip_id');
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  let q = supabaseAdmin
+    .from('asset_inspections')
+    .select('*, asset_changes(*)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (status) q = q.eq('status', status);
+  if (tripId) q = q.eq('trip_id', tripId);
+
+  const { data, error, count } = await q;
+  if (error) throw new HTTPException(500, { message: error.message });
+
+  return c.json({
+    success: true,
+    data: data ?? [],
+    pagination: {
+      total: count ?? 0,
+      page,
+      per_page: perPage,
+      total_pages: Math.ceil((count ?? 0) / perPage),
+    },
+  });
+});
+
 /** GET /asset-inspections/:id */
 assetInspectionsRoutes.get('/:id', async (c) => {
   const { data, error } = await supabaseAdmin
