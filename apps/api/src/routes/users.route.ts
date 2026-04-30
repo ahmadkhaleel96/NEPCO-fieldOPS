@@ -7,6 +7,7 @@ import {
 } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const usersRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -106,6 +107,7 @@ usersRoutes.post('/', requireRole('admin'), async (c) => {
 /** GET /users/:id */
 usersRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
   const requesterId = c.get('userId');
   const requesterRole = c.get('userRole');
 
@@ -128,6 +130,7 @@ usersRoutes.get('/:id', async (c) => {
 /** PATCH /users/:id */
 usersRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
   const requesterId = c.get('userId');
   const requesterRole = c.get('userRole');
 
@@ -169,6 +172,7 @@ usersRoutes.patch('/:id', async (c) => {
 /** DELETE /users/:id — soft delete (sets is_active = false) */
 usersRoutes.delete('/:id', requireRole('admin'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data, error } = await supabaseAdmin
     .from('users')

@@ -33,3 +33,12 @@ export const PERMIT_NUMBER_PREFIX = 'WP';
 
 /** Safety report number format prefix */
 export const SAFETY_REPORT_PREFIX = 'SAF';
+
+/** Maximum request body size in bytes (1 MB) */
+export const MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024;
+
+/** Report generation rate limit per user: max requests in window */
+export const REPORT_GENERATION_RATE_LIMIT_MAX = 2;
+
+/** Report generation rate limit per user: window duration in seconds */
+export const REPORT_GENERATION_RATE_LIMIT_WINDOW_S = 60;

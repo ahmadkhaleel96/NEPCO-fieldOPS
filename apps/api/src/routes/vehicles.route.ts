@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { CreateVehicleSchema, UpdateVehicleSchema, PaginationQuerySchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const vehiclesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -79,6 +80,7 @@ vehiclesRoutes.post('/', requireRole('admin', 'engineer'), async (c) => {
 
 /** GET /vehicles/:id */
 vehiclesRoutes.get('/:id', async (c) => {
+  validateUuid(c.req.param('id'));
   const { data, error } = await supabaseAdmin
     .from('vehicles')
     .select('*')
@@ -92,6 +94,7 @@ vehiclesRoutes.get('/:id', async (c) => {
 
 /** PATCH /vehicles/:id */
 vehiclesRoutes.patch('/:id', requireRole('admin', 'engineer'), async (c) => {
+  validateUuid(c.req.param('id'));
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });
   });
@@ -126,6 +129,7 @@ vehiclesRoutes.patch('/:id', requireRole('admin', 'engineer'), async (c) => {
 /** DELETE /vehicles/:id — soft delete */
 vehiclesRoutes.delete('/:id', requireRole('admin'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data, error } = await supabaseAdmin
     .from('vehicles')

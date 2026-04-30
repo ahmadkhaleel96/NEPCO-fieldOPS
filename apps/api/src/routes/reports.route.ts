@@ -3,6 +3,8 @@ import { HTTPException } from 'hono/http-exception';
 import { PaginationQuerySchema, GenerateReportSchema, type ReportData } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { reportGenerationRateLimiter } from '../lib/redis';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const reportsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -31,6 +33,8 @@ async function computeHash(data: unknown): Promise<string> {
     .join('');
 }
 
+const VALID_CADENCES = new Set(['daily', 'weekly', 'monthly', 'quarterly', 'bi_yearly', 'yearly']);
+
 // ─── GET /reports ─────────────────────────────────────────────────────────────
 
 reportsRoutes.get('/', async (c) => {
@@ -39,6 +43,13 @@ reportsRoutes.get('/', async (c) => {
     per_page: c.req.query('per_page'),
   });
   const cadenceFilter = c.req.query('cadence');
+
+  if (cadenceFilter && !VALID_CADENCES.has(cadenceFilter)) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: `Invalid cadence. Must be one of: ${[...VALID_CADENCES].join(', ')}` } },
+      422
+    );
+  }
   const from = (query.page - 1) * query.per_page;
   const to = from + query.per_page - 1;
 
@@ -70,6 +81,7 @@ reportsRoutes.get('/', async (c) => {
 // ─── GET /reports/:id ─────────────────────────────────────────────────────────
 
 reportsRoutes.get('/:id', async (c) => {
+  validateUuid(c.req.param('id'));
   const { data, error } = await supabaseAdmin
     .from('reports')
     .select('*')
@@ -104,6 +116,17 @@ reportsRoutes.post('/generate', requireRole('admin'), async (c) => {
   }
 
   const { cadence, period_start: periodStart, period_end: periodEnd } = parsed.data;
+
+  // Per-user rate limit: 2 report generations per 60 seconds
+  const userId = c.get('userId');
+  const { success: rateLimitOk, reset } = await reportGenerationRateLimiter.limit(userId);
+  if (!rateLimitOk) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+    c.header('Retry-After', String(retryAfter));
+    throw new HTTPException(429, {
+      message: 'Report generation rate limit exceeded. Please wait before generating another report.',
+    });
+  }
 
   // ── Step 1: Permits in period ──────────────────────────────────────────────
   const { data: permits } = await supabaseAdmin
@@ -245,6 +268,7 @@ reportsRoutes.post('/generate', requireRole('admin'), async (c) => {
 // ─── POST /reports/:id/verify ─────────────────────────────────────────────────
 
 reportsRoutes.post('/:id/verify', async (c) => {
+  validateUuid(c.req.param('id'));
   const { data: report, error } = await supabaseAdmin
     .from('reports')
     .select('id, data, sha256')
@@ -274,6 +298,7 @@ reportsRoutes.post('/:id/verify', async (c) => {
 // ─── POST /reports/:id/regenerate-pdf ─────────────────────────────────────────
 
 reportsRoutes.post('/:id/regenerate-pdf', requireRole('admin'), async (c) => {
+  validateUuid(c.req.param('id'));
   const { data: report, error } = await supabaseAdmin
     .from('reports')
     .select('id, cadence, period_start, period_end')

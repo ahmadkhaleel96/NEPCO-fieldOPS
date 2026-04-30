@@ -90,6 +90,7 @@ function from(chain: MockChain) {
 const V1 = '00000000-0000-0000-0000-000000000001'; // vehicle_id
 const V2 = '00000000-0000-0000-0000-000000000002'; // permit_id
 const V3 = '00000000-0000-0000-0000-000000000003'; // driver/user
+const V_TRIP = '00000000-0000-0000-0000-000000000006'; // trip id
 
 const MOCK_TAG_ROW = { id: 'tag-db-1', vehicle_id: V1, status: 'active' };
 const MOCK_PERMIT_ROW = { id: V2, vehicle_id: V1, engineer_id: 'eng-1', status: 'issued' };
@@ -283,7 +284,7 @@ describe('POST /trips/:id/locations', () => {
   it('returns 422 for empty locations array', async () => {
     mockAuthUser('driver');
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/locations', {
+    const res = await app.request(`/trips/${V_TRIP}/locations`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ locations: [] }),
@@ -297,7 +298,7 @@ describe('POST /trips/:id/locations', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/locations', {
+    const res = await app.request(`/trips/${V_TRIP}/locations`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify(VALID_LOCATIONS),
@@ -317,7 +318,7 @@ describe('GET /trips/:id/track', () => {
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/track', { headers: authHeader() });
+    const res = await app.request(`/trips/${V_TRIP}/track`, { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
@@ -331,7 +332,7 @@ describe('GET /trips/:id/track', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/track', { headers: authHeader() });
+    const res = await app.request(`/trips/${V_TRIP}/track`, { headers: authHeader() });
     expect(res.status).toBe(200);
     const body = await res.json() as {
       success: boolean;
@@ -351,7 +352,7 @@ describe('POST /trips/:id/end', () => {
   it('returns 403 for engineer', async () => {
     mockAuthUser('engineer');
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/end', {
+    const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
@@ -365,7 +366,7 @@ describe('POST /trips/:id/end', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/end', {
+    const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
@@ -385,7 +386,7 @@ describe('POST /trips/:id/end', () => {
       .mockReturnValueOnce(from(makeChain({ data: null, error: null })));       // update permit
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/end', {
+    const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
@@ -403,7 +404,7 @@ describe('POST /trips/:id/end', () => {
       .mockReturnValueOnce(from(makeChain({ data: null, error: { message: 'No rows' } })));
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/end', {
+    const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
@@ -425,7 +426,7 @@ describe('POST /trips/:id/end', () => {
       .mockReturnValueOnce(from(makeChain({ data: null, error: null })));       // update permit
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/end', {
+    const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: 31.95, lng: 35.91 }),
@@ -452,7 +453,7 @@ describe('POST /trips/:id/end', () => {
       .mockReturnValueOnce(from(makeChain({ data: null, error: null })));                 // update permit
 
     const app = makeApp();
-    const res = await app.request('/trips/trip-1/end', {
+    const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat: 31.95, lng: 35.91 }),

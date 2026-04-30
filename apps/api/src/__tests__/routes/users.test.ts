@@ -20,6 +20,11 @@ vi.mock('../../lib/supabase', () => ({
 const { supabaseAnon, supabaseAdmin } = await import('../../lib/supabase');
 const { usersRoutes } = await import('../../routes/users.route');
 
+const V_SELF = '00000000-0000-0000-0000-000000000010';
+const V_OTHER = '00000000-0000-0000-0000-000000000011';
+const V_USER = '00000000-0000-0000-0000-000000000012';
+const V_NOT_FOUND = '00000000-0000-0000-0000-000000000099';
+
 function makeApp() {
   const app = new Hono();
   app.route('/users', usersRoutes);
@@ -191,20 +196,20 @@ describe('GET /users/:id', () => {
   beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
 
   it('allows user to fetch their own record', async () => {
-    mockAuthUser('driver', 'user-self');
+    mockAuthUser('driver', V_SELF);
     const chain = mockFromChain();
     chain.single = vi.fn().mockResolvedValue({
-      data: { id: 'user-self', email: 's@s.com' },
+      data: { id: V_SELF, email: 's@s.com' },
       error: null,
     });
 
-    const res = await app.request('/users/user-self', { headers: authHeader() });
+    const res = await app.request(`/users/${V_SELF}`, { headers: authHeader() });
     expect(res.status).toBe(200);
   });
 
   it('blocks driver from fetching another user', async () => {
-    mockAuthUser('driver', 'user-self');
-    const res = await app.request('/users/other-user', { headers: authHeader() });
+    mockAuthUser('driver', V_SELF);
+    const res = await app.request(`/users/${V_OTHER}`, { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
@@ -212,11 +217,11 @@ describe('GET /users/:id', () => {
     mockAuthUser('admin', 'admin-id');
     const chain = mockFromChain();
     chain.single = vi.fn().mockResolvedValue({
-      data: { id: 'other-user', email: 'o@o.com' },
+      data: { id: V_OTHER, email: 'o@o.com' },
       error: null,
     });
 
-    const res = await app.request('/users/other-user', { headers: authHeader() });
+    const res = await app.request(`/users/${V_OTHER}`, { headers: authHeader() });
     expect(res.status).toBe(200);
   });
 
@@ -225,7 +230,7 @@ describe('GET /users/:id', () => {
     const chain = mockFromChain();
     chain.single = vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
 
-    const res = await app.request('/users/nonexistent', { headers: authHeader() });
+    const res = await app.request(`/users/${V_NOT_FOUND}`, { headers: authHeader() });
     expect(res.status).toBe(404);
   });
 });
@@ -235,14 +240,14 @@ describe('PATCH /users/:id', () => {
   beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
 
   it('allows user to update their own record', async () => {
-    mockAuthUser('technician', 'user-self');
+    mockAuthUser('technician', V_SELF);
     const chain = mockFromChain();
     chain.single = vi.fn().mockResolvedValue({
-      data: { id: 'user-self', full_name: 'Updated' },
+      data: { id: V_SELF, full_name: 'Updated' },
       error: null,
     });
 
-    const res = await app.request('/users/user-self', {
+    const res = await app.request(`/users/${V_SELF}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ full_name: 'Updated' }),
@@ -251,8 +256,8 @@ describe('PATCH /users/:id', () => {
   });
 
   it('blocks non-admin from updating another user', async () => {
-    mockAuthUser('engineer', 'user-self');
-    const res = await app.request('/users/other-user', {
+    mockAuthUser('engineer', V_SELF);
+    const res = await app.request(`/users/${V_OTHER}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ full_name: 'Hacked' }),
@@ -261,8 +266,8 @@ describe('PATCH /users/:id', () => {
   });
 
   it('returns 422 for invalid update data', async () => {
-    mockAuthUser('admin', 'user-self');
-    const res = await app.request('/users/user-self', {
+    mockAuthUser('admin', V_SELF);
+    const res = await app.request(`/users/${V_SELF}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: 'superuser' }),
@@ -277,7 +282,7 @@ describe('DELETE /users/:id', () => {
 
   it('returns 403 for non-admin', async () => {
     mockAuthUser('engineer');
-    const res = await app.request('/users/u-1', { method: 'DELETE', headers: authHeader() });
+    const res = await app.request(`/users/${V_USER}`, { method: 'DELETE', headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
@@ -289,7 +294,7 @@ describe('DELETE /users/:id', () => {
       error: null,
     });
 
-    const res = await app.request('/users/u-1', { method: 'DELETE', headers: authHeader() });
+    const res = await app.request(`/users/${V_USER}`, { method: 'DELETE', headers: authHeader() });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.is_active).toBe(false);

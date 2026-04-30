@@ -7,6 +7,10 @@ vi.mock('../../lib/supabase', () => ({
   supabaseAdmin: { from: vi.fn() },
 }));
 
+vi.mock('../../lib/redis', () => ({
+  reportGenerationRateLimiter: { limit: vi.fn() },
+}));
+
 // Web Crypto is available globally in Node 19+; polyfill for older versions
 if (!globalThis.crypto?.subtle) {
   const nodeCrypto = await import('node:crypto');
@@ -17,6 +21,7 @@ if (!globalThis.crypto?.subtle) {
 }
 
 const { supabaseAnon, supabaseAdmin } = await import('../../lib/supabase');
+const { reportGenerationRateLimiter } = await import('../../lib/redis');
 const { reportsRoutes } = await import('../../routes/reports.route');
 
 function makeApp() {
@@ -109,6 +114,13 @@ const VALID_GENERATE_BODY = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(reportGenerationRateLimiter.limit).mockResolvedValue({
+    success: true,
+    reset: Date.now() + 60000,
+    limit: 2,
+    remaining: 1,
+    pending: Promise.resolve(),
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

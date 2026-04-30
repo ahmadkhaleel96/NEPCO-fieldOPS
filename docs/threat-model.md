@@ -2,7 +2,7 @@
 
 **Methodology:** OWASP Threat Modelling + STRIDE framework  
 **Status:** Living document — revisit before every major feature addition  
-**Last reviewed:** 2026-04-14
+**Last reviewed:** 2026-04-30 (Phase 7 hardening)
 
 ---
 

@@ -23,6 +23,8 @@ export const loggerMiddleware = createMiddleware(async (c, next) => {
 
   await next();
 
+  c.header('X-Request-ID', requestId);
+
   const durationMs = Date.now() - start;
   const userId = c.get('userId') as string | undefined;
 

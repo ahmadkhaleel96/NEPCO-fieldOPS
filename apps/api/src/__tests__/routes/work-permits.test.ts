@@ -79,6 +79,8 @@ const V1 = '00000000-0000-0000-0000-000000000001';
 const V2 = '00000000-0000-0000-0000-000000000002';
 const V3 = '00000000-0000-0000-0000-000000000003';
 const V4 = '00000000-0000-0000-0000-000000000004';
+const V_PERMIT = '00000000-0000-0000-0000-000000000005';
+const V_NOT_FOUND = '00000000-0000-0000-0000-000000000099';
 
 const MOCK_PERMIT = {
   id: 'permit-1',
@@ -237,7 +239,7 @@ describe('GET /work-permits/:id', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
-    const res = await app.request('/work-permits/permit-1', { headers: authHeader() });
+    const res = await app.request(`/work-permits/${V_PERMIT}`, { headers: authHeader() });
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean; data: { id: string } };
     expect(body.data.id).toBe('permit-1');
@@ -249,7 +251,7 @@ describe('GET /work-permits/:id', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
-    const res = await app.request('/work-permits/nonexistent', { headers: authHeader() });
+    const res = await app.request(`/work-permits/${V_NOT_FOUND}`, { headers: authHeader() });
     expect(res.status).toBe(404);
   });
 });
@@ -258,7 +260,7 @@ describe('POST /work-permits/:id/withdraw', () => {
   it('returns 403 for driver', async () => {
     mockAuthUser('driver');
     const app = makeApp();
-    const res = await app.request('/work-permits/permit-1/withdraw', {
+    const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'Safety concern on site, must postpone.' }),
@@ -269,7 +271,7 @@ describe('POST /work-permits/:id/withdraw', () => {
   it('returns 422 when reason is too short', async () => {
     mockAuthUser('admin');
     const app = makeApp();
-    const res = await app.request('/work-permits/permit-1/withdraw', {
+    const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'short' }),
@@ -284,7 +286,7 @@ describe('POST /work-permits/:id/withdraw', () => {
     vi.mocked(supabaseAdmin.from).mockReturnValue(tripsChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
-    const res = await app.request('/work-permits/permit-1/withdraw', {
+    const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'Safety concern on site, must postpone.' }),
@@ -310,7 +312,7 @@ describe('POST /work-permits/:id/withdraw', () => {
       .mockReturnValueOnce(eventsChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
-    const res = await app.request('/work-permits/permit-1/withdraw', {
+    const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'Safety concern on site, must postpone.' }),
@@ -333,7 +335,7 @@ describe('POST /work-permits/:id/withdraw', () => {
       .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
-    const res = await app.request('/work-permits/permit-1/withdraw', {
+    const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'Safety concern on site, must postpone.' }),

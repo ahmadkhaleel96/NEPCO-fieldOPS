@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { SubmitInspectionSchema, CreateSafetyReportSchema } from '@fieldops/shared';
 import { authMiddleware, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const assetInspectionsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -163,6 +164,7 @@ assetInspectionsRoutes.get('/', async (c) => {
 
 /** GET /asset-inspections/:id */
 assetInspectionsRoutes.get('/:id', async (c) => {
+  validateUuid(c.req.param('id'));
   const { data, error } = await supabaseAdmin
     .from('asset_inspections')
     .select('*, asset_changes(*)')

@@ -67,6 +67,9 @@ function mockFromChain(overrides: Record<string, unknown> = {}): MockChain {
   return chain;
 }
 
+const V_VEHICLE = 'bbbbbbbb-0000-0000-0000-000000000001';
+const V_NOT_FOUND = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
 const MOCK_VEHICLE = {
   id: 'v-1',
   vehicle_code: 'VH-001',
@@ -178,7 +181,7 @@ describe('GET /vehicles/:id', () => {
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
     });
-    const res = await app.request('/vehicles/nonexistent', { headers: authHeader() });
+    const res = await app.request(`/vehicles/${V_NOT_FOUND}`, { headers: authHeader() });
     expect(res.status).toBe(404);
   });
 
@@ -187,7 +190,7 @@ describe('GET /vehicles/:id', () => {
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: MOCK_VEHICLE, error: null }),
     });
-    const res = await app.request('/vehicles/v-1', { headers: authHeader() });
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, { headers: authHeader() });
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean; data: typeof MOCK_VEHICLE };
     expect(body.data.vehicle_code).toBe('VH-001');
@@ -200,7 +203,7 @@ describe('PATCH /vehicles/:id', () => {
 
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
-    const res = await app.request('/vehicles/v-1', {
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ plate_number: 'XYZ-9999' }),
@@ -216,7 +219,7 @@ describe('PATCH /vehicles/:id', () => {
     });
     chain.select.mockReturnValue(chain);
 
-    const res = await app.request('/vehicles/v-1', {
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ plate_number: 'XYZ-9999' }),
@@ -233,7 +236,7 @@ describe('DELETE /vehicles/:id', () => {
 
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
-    const res = await app.request('/vehicles/v-1', {
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
       method: 'DELETE',
       headers: authHeader(),
     });
@@ -247,7 +250,7 @@ describe('DELETE /vehicles/:id', () => {
     });
     chain.select.mockReturnValue(chain);
 
-    const res = await app.request('/vehicles/v-1', {
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
       method: 'DELETE',
       headers: authHeader(),
     });

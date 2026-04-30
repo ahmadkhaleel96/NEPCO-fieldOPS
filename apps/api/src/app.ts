@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { loggerMiddleware } from './middleware/logger.middleware';
 import { apiRateLimitMiddleware } from './middleware/rate-limit.middleware';
+import { bodySizeLimitMiddleware } from './middleware/body-limit.middleware';
 import { errorHandler } from './middleware/error.middleware';
 import { authRoutes } from './routes/auth.route';
 import { usersRoutes } from './routes/users.route';
@@ -30,8 +31,18 @@ export function createApp() {
       xContentTypeOptions: 'nosniff',
       xFrameOptions: 'DENY',
       referrerPolicy: 'no-referrer',
+      contentSecurityPolicy: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
     })
   );
+
+  // Deny browser features not needed by a JSON API
+  app.use((c, next) => {
+    c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    return next();
+  });
 
   // ----------------------------------------------------------------
   // CORS — restrict to known origins in production
@@ -54,6 +65,7 @@ export function createApp() {
   // Global middleware
   // ----------------------------------------------------------------
   app.use(loggerMiddleware);
+  app.use(bodySizeLimitMiddleware);
   app.use(apiRateLimitMiddleware);
 
   // ----------------------------------------------------------------

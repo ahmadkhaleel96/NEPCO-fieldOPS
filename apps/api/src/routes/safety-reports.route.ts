@@ -2,6 +2,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const safetyReportsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -39,6 +40,7 @@ safetyReportsRoutes.get('/', requireRole('admin', 'engineer'), async (c) => {
 /** GET /safety-reports/:id */
 safetyReportsRoutes.get('/:id', requireRole('admin', 'engineer'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data, error } = await supabaseAdmin
     .from('safety_reports')

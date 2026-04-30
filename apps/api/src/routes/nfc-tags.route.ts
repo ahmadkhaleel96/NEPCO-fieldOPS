@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { ProvisionNfcTagSchema, ConfirmNfcTagInstallSchema, PaginationQuerySchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const nfcTagsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -108,6 +109,7 @@ nfcTagsRoutes.post('/', requireRole('admin'), async (c) => {
 
 /** GET /nfc-tags/:id */
 nfcTagsRoutes.get('/:id', requireRole('admin', 'engineer'), async (c) => {
+  validateUuid(c.req.param('id'));
   const { data, error } = await supabaseAdmin
     .from('nfc_tags')
     .select('*')
@@ -124,6 +126,7 @@ nfcTagsRoutes.get('/:id', requireRole('admin', 'engineer'), async (c) => {
 
 /** PATCH /nfc-tags/:id/confirm-install — field tech confirms tag is mounted */
 nfcTagsRoutes.patch('/:id/confirm-install', requireRole('admin'), async (c) => {
+  validateUuid(c.req.param('id'));
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });
   });

@@ -315,6 +315,13 @@ export class ApiClient {
     };
   }
 
+  get auth() {
+    return {
+      revoke: (payload: RevokeSessionPayload) =>
+        this.request<{ success: true; data: { message: string } }>('POST', '/auth/revoke', payload),
+    };
+  }
+
   get nfcTags() {
     return {
       list: (params?: { page?: number; per_page?: number; status?: NfcTagStatus }) => {
@@ -657,6 +664,10 @@ export interface ApiClientSafetyReport {
   hazard_description: string;
   photo_urls: string[];
   created_at: string;
+}
+
+export interface RevokeSessionPayload {
+  user_id: string;
 }
 
 export class ApiError extends Error {

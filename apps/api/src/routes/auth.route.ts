@@ -2,8 +2,8 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import { authRateLimitMiddleware } from '../middleware/rate-limit.middleware';
-import { authMiddleware, type AuthVariables } from '../middleware/auth.middleware';
-import { supabaseAnon } from '../lib/supabase';
+import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
+import { supabaseAnon, supabaseAdmin } from '../lib/supabase';
 
 export const authRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -78,6 +78,37 @@ authRoutes.post('/signout', authMiddleware, async (c) => {
   );
 
   return c.json({ success: true, data: { message: 'Signed out successfully' } });
+});
+
+/** POST /auth/revoke — admin revokes all active sessions for a user (e.g. lost device) */
+authRoutes.post('/revoke', authRateLimitMiddleware, authMiddleware, requireRole('admin'), async (c) => {
+  const body = await c.req.json().catch(() => {
+    throw new HTTPException(400, { message: 'Invalid JSON body' });
+  });
+
+  const RevokeSchema = z.object({ user_id: z.string().uuid() });
+  const parsed = RevokeSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'user_id must be a valid UUID',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      },
+      422
+    );
+  }
+
+  const { error } = await supabaseAdmin.auth.admin.signOut(parsed.data.user_id, 'global');
+
+  if (error) {
+    throw new HTTPException(500, { message: 'Session revocation failed' });
+  }
+
+  return c.json({ success: true, data: { message: 'All sessions revoked for user' } });
 });
 
 /** POST /auth/refresh — exchanges refresh token cookie for new access token */

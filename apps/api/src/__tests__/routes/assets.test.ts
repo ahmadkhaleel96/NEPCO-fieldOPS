@@ -83,6 +83,9 @@ function mockFromChain(
   return chain;
 }
 
+const V_ASSET = 'aaaaaaaa-0000-0000-0000-000000000001';
+const V_NOT_FOUND = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
 const MOCK_ASSET = {
   id: 'a-1',
   asset_code: 'TWR-001',
@@ -218,7 +221,7 @@ describe('GET /assets/:id', () => {
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
     });
 
-    const res = await app.request('/assets/nonexistent', { headers: authHeader() });
+    const res = await app.request(`/assets/${V_NOT_FOUND}`, { headers: authHeader() });
     expect(res.status).toBe(404);
   });
 
@@ -228,7 +231,7 @@ describe('GET /assets/:id', () => {
       single: vi.fn().mockResolvedValue({ data: MOCK_ASSET, error: null }),
     });
 
-    const res = await app.request('/assets/a-1', { headers: authHeader() });
+    const res = await app.request(`/assets/${V_ASSET}`, { headers: authHeader() });
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean; data: typeof MOCK_ASSET };
     expect(body.data.id).toBe('a-1');
@@ -241,7 +244,7 @@ describe('PATCH /assets/:id', () => {
 
   it('returns 403 for viewer role', async () => {
     mockAuthUser('viewer');
-    const res = await app.request('/assets/a-1', {
+    const res = await app.request(`/assets/${V_ASSET}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Updated' }),
@@ -257,7 +260,7 @@ describe('PATCH /assets/:id', () => {
     });
     chain.select.mockReturnValue(chain);
 
-    const res = await app.request('/assets/a-1', {
+    const res = await app.request(`/assets/${V_ASSET}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Updated Tower' }),
@@ -274,7 +277,7 @@ describe('DELETE /assets/:id', () => {
 
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
-    const res = await app.request('/assets/a-1', {
+    const res = await app.request(`/assets/${V_ASSET}`, {
       method: 'DELETE',
       headers: authHeader(),
     });
@@ -288,7 +291,7 @@ describe('DELETE /assets/:id', () => {
     });
     chain.select.mockReturnValue(chain);
 
-    const res = await app.request('/assets/a-1', {
+    const res = await app.request(`/assets/${V_ASSET}`, {
       method: 'DELETE',
       headers: authHeader(),
     });

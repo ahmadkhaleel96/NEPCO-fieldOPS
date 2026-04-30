@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { ResolveFollowUpTaskSchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const followUpTasksRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -43,6 +44,7 @@ followUpTasksRoutes.get('/', requireRole('admin', 'engineer', 'team_leader'), as
 /** GET /follow-up-tasks/:id */
 followUpTasksRoutes.get('/:id', requireRole('admin', 'engineer', 'team_leader'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data, error } = await supabaseAdmin
     .from('follow_up_tasks')
@@ -59,6 +61,7 @@ followUpTasksRoutes.get('/:id', requireRole('admin', 'engineer', 'team_leader'),
 /** PATCH /follow-up-tasks/:id/resolve — mark a task resolved */
 followUpTasksRoutes.patch('/:id/resolve', requireRole('admin', 'engineer', 'team_leader', 'driver'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });

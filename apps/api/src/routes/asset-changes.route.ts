@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { ReviewChangeSchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const assetChangesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -51,6 +52,7 @@ assetChangesRoutes.get('/', requireRole('admin', 'engineer'), async (c) => {
  */
 assetChangesRoutes.patch('/:id/approve', requireRole('admin', 'engineer'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });

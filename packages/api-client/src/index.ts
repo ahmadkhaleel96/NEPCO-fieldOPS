@@ -67,4 +67,5 @@ export type {
   ApiClientFollowUpTask,
   ResolveFollowUpTaskPayload,
   ApiClientSafetyReport,
+  RevokeSessionPayload,
 } from './client';

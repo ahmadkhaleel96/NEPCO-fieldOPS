@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { StartTripSchema, PostTripLocationsSchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const tripsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -140,6 +141,7 @@ tripsRoutes.post('/', requireRole('driver', 'admin'), async (c) => {
 
 /** POST /trips/:id/locations — batch GPS upload */
 tripsRoutes.post('/:id/locations', async (c) => {
+  validateUuid(c.req.param('id'));
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });
   });
@@ -181,6 +183,7 @@ tripsRoutes.post('/:id/locations', async (c) => {
 
 /** GET /trips/:id/track — GeoJSON LineString for map rendering */
 tripsRoutes.get('/:id/track', requireRole('admin', 'engineer'), async (c) => {
+  validateUuid(c.req.param('id'));
   const tripId = c.req.param('id');
 
   const { data: locations, error } = await supabaseAdmin
@@ -206,6 +209,7 @@ tripsRoutes.get('/:id/track', requireRole('admin', 'engineer'), async (c) => {
 /** POST /trips/:id/end — close the trip (return NFC scan) */
 tripsRoutes.post('/:id/end', requireRole('driver', 'admin'), async (c) => {
   const tripId = c.req.param('id');
+  validateUuid(tripId);
 
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });

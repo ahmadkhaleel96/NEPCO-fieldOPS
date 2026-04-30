@@ -7,6 +7,7 @@ import {
 } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const workPermitsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -118,6 +119,7 @@ workPermitsRoutes.post('/', requireRole('admin', 'engineer'), async (c) => {
 /** GET /work-permits/:id */
 workPermitsRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data: permit, error } = await supabaseAdmin
     .from('work_permits')
@@ -133,6 +135,7 @@ workPermitsRoutes.get('/:id', async (c) => {
 /** POST /work-permits/:id/withdraw */
 workPermitsRoutes.post('/:id/withdraw', requireRole('admin', 'engineer'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });

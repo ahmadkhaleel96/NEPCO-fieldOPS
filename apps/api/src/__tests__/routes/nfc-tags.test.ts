@@ -75,6 +75,9 @@ function mockFromChain(overrides: Record<string, unknown> = {}, resolveWith?: un
   return chain;
 }
 
+const V_TAG = 'cccccccc-0000-0000-0000-000000000001';
+const V_NOT_FOUND = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
 const MOCK_TAG = {
   id: 'tag-1',
   tag_id: 'ABCD1234',
@@ -208,7 +211,7 @@ describe('GET /nfc-tags/:id', () => {
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
     });
-    const res = await app.request('/nfc-tags/nonexistent', { headers: authHeader() });
+    const res = await app.request(`/nfc-tags/${V_NOT_FOUND}`, { headers: authHeader() });
     expect(res.status).toBe(404);
   });
 
@@ -217,7 +220,7 @@ describe('GET /nfc-tags/:id', () => {
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: MOCK_TAG, error: null }),
     });
-    const res = await app.request('/nfc-tags/tag-1', { headers: authHeader() });
+    const res = await app.request(`/nfc-tags/${V_TAG}`, { headers: authHeader() });
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean; data: Record<string, unknown> };
     expect(body.data.tag_id).toBe('ABCD1234');
@@ -231,7 +234,7 @@ describe('PATCH /nfc-tags/:id/confirm-install', () => {
 
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
-    const res = await app.request('/nfc-tags/tag-1/confirm-install', {
+    const res = await app.request(`/nfc-tags/${V_TAG}/confirm-install`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ latitude: 31.9, longitude: 35.9, photo_url: 'https://example.com/photo.jpg' }),
@@ -241,7 +244,7 @@ describe('PATCH /nfc-tags/:id/confirm-install', () => {
 
   it('returns 422 for invalid photo_url', async () => {
     mockAuthUser('admin');
-    const res = await app.request('/nfc-tags/tag-1/confirm-install', {
+    const res = await app.request(`/nfc-tags/${V_TAG}/confirm-install`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ latitude: 31.9, longitude: 35.9, photo_url: 'not-a-url' }),
@@ -257,7 +260,7 @@ describe('PATCH /nfc-tags/:id/confirm-install', () => {
     });
     chain.select.mockImplementation(() => chain);
 
-    const res = await app.request('/nfc-tags/tag-1/confirm-install', {
+    const res = await app.request(`/nfc-tags/${V_TAG}/confirm-install`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({

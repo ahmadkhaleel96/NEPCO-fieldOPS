@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { CreateAssetSchema, UpdateAssetSchema, PaginationQuerySchema } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
+import { validateUuid } from '../lib/validate-uuid';
 
 export const assetsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -96,6 +97,7 @@ assetsRoutes.post('/', requireRole('admin', 'engineer'), async (c) => {
 /** GET /assets/:id */
 assetsRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data, error } = await supabaseAdmin
     .from('assets')
@@ -111,6 +113,7 @@ assetsRoutes.get('/:id', async (c) => {
 /** PATCH /assets/:id */
 assetsRoutes.patch('/:id', requireRole('admin', 'engineer'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const body = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });
@@ -153,6 +156,7 @@ assetsRoutes.patch('/:id', requireRole('admin', 'engineer'), async (c) => {
 /** DELETE /assets/:id — soft delete (set is_active = false) */
 assetsRoutes.delete('/:id', requireRole('admin'), async (c) => {
   const id = c.req.param('id');
+  validateUuid(id);
 
   const { data, error } = await supabaseAdmin
     .from('assets')
