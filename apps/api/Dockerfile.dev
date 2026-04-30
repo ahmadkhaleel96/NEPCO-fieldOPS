@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+# Development image — uses tsx for hot-reload. Never use in production.
+
+FROM node:22-alpine
+
+ENV NODE_ENV=development
+
+WORKDIR /app
+
+COPY package.json package-lock.json turbo.json tsconfig.base.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/api-client/package.json ./packages/api-client/
+COPY apps/api/package.json ./apps/api/
+
+RUN npm ci --ignore-scripts
+
+COPY packages/shared/ ./packages/shared/
+COPY packages/api-client/ ./packages/api-client/
+COPY apps/api/ ./apps/api/
+
+EXPOSE 3000
+
+CMD ["npx", "tsx", "watch", "apps/api/src/index.ts"]
