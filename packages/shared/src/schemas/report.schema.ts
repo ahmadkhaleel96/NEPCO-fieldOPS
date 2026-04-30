@@ -67,6 +67,17 @@ export const ReportListResponseSchema = z.object({
 
 export type ReportListResponse = z.infer<typeof ReportListResponseSchema>;
 
+export const GenerateReportSchema = z.object({
+  cadence: ReportCadenceSchema,
+  period_start: z.string().datetime({ message: 'period_start must be an ISO 8601 datetime' }),
+  period_end: z.string().datetime({ message: 'period_end must be an ISO 8601 datetime' }),
+}).refine(
+  (d) => new Date(d.period_start) < new Date(d.period_end),
+  { message: 'period_start must be before period_end', path: ['period_start'] }
+);
+
+export type GenerateReport = z.infer<typeof GenerateReportSchema>;
+
 export const IntegrityAlertSchema = z.object({
   id: z.string().uuid(),
   report_id: z.string().uuid(),

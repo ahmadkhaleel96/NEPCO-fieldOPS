@@ -459,6 +459,30 @@ export class ApiClient {
     };
   }
 
+  get reports() {
+    return {
+      list: (params?: { page?: number; per_page?: number; cadence?: ReportCadence }) => {
+        const qs = new URLSearchParams();
+        if (params?.page) qs.set('page', String(params.page));
+        if (params?.per_page) qs.set('per_page', String(params.per_page));
+        if (params?.cadence) qs.set('cadence', params.cadence);
+        const query = qs.toString() ? `?${qs.toString()}` : '';
+        return this.request<PaginatedResponse<ApiClientReportListItem>>('GET', `/reports${query}`);
+      },
+      get: (id: string) =>
+        this.request<{ success: true; data: ApiClientReport }>('GET', `/reports/${id}`),
+      generate: (payload: GenerateReportPayload) =>
+        this.request<{ success: true; data: ApiClientReport }>('POST', '/reports/generate', payload),
+      verify: (id: string) =>
+        this.request<{ success: true; data: VerifyReportResult }>('POST', `/reports/${id}/verify`),
+      regeneratePdf: (id: string) =>
+        this.request<{ success: true; data: { report_id: string; message: string } }>(
+          'POST',
+          `/reports/${id}/regenerate-pdf`
+        ),
+    };
+  }
+
   get followUpTasks() {
     return {
       list: (params?: { page?: number; per_page?: number; asset_id?: string; resolved?: boolean }) => {
@@ -555,6 +579,57 @@ export interface ApiClientAssetChange {
 export interface ReviewChangePayload {
   action: 'approve' | 'reject';
   notes?: string;
+}
+
+export type ReportCadence = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'bi_yearly' | 'yearly';
+
+export interface ApiClientReportSummary {
+  total_permits: number;
+  completed_permits: number;
+  incomplete_permits: number;
+  suspended_permits: number;
+  total_trips: number;
+  total_inspections: number;
+  approved_changes: number;
+  rejected_changes: number;
+  safety_reports: number;
+  total_nfc_events: number;
+}
+
+export interface ApiClientReportData {
+  period_start: string;
+  period_end: string;
+  cadence: ReportCadence;
+  summary: ApiClientReportSummary;
+  by_asset_type: Array<{ asset_type: string; inspection_count: number; change_count: number }>;
+  by_engineer: Array<{ engineer_id: string; permit_count: number; approval_count: number }>;
+}
+
+export interface ApiClientReport {
+  id: string;
+  cadence: ReportCadence;
+  period_start: string;
+  period_end: string;
+  data: ApiClientReportData;
+  sha256: string;
+  pdf_url: string | null;
+  csv_sent_at: string | null;
+  generated_at: string;
+}
+
+export interface ApiClientReportListItem extends Omit<ApiClientReport, 'data'> {}
+
+export interface GenerateReportPayload {
+  cadence: ReportCadence;
+  period_start: string;
+  period_end: string;
+}
+
+export interface VerifyReportResult {
+  report_id: string;
+  match: boolean;
+  stored_hash: string;
+  actual_hash: string;
 }
 
 export interface ApiClientFollowUpTask {

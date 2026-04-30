@@ -11,6 +11,7 @@ import { NfcTagsPage } from './pages/NfcTagsPage';
 import { WorkPermitsPage } from './pages/WorkPermitsPage';
 import { InspectionsPage } from './pages/InspectionsPage';
 import { FollowUpTasksPage } from './pages/FollowUpTasksPage';
+import { ReportsPage } from './pages/ReportsPage';
 import styles from './styles/App.module.css';
 
 export function App() {
@@ -86,6 +87,9 @@ export function App() {
           )}
           {(userRole === 'admin' || userRole === 'engineer' || userRole === 'team_leader') && (
             <Route path="follow-up-tasks" element={<FollowUpTasksPage />} />
+          )}
+          {(userRole === 'admin' || userRole === 'engineer') && (
+            <Route path="reports" element={<ReportsPage userRole={userRole} />} />
           )}
           {userRole === 'admin' && (
             <Route path="users" element={<UsersPage />} />

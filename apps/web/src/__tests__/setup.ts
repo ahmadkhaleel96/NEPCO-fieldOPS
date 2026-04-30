@@ -142,6 +142,17 @@ vi.mock('../lib/api-client', () => ({
       }),
       get: vi.fn(),
     },
+    reports: {
+      list: vi.fn().mockResolvedValue({
+        success: true,
+        data: [],
+        pagination: { total: 0, page: 1, per_page: 20, total_pages: 0 },
+      }),
+      get: vi.fn(),
+      generate: vi.fn(),
+      verify: vi.fn(),
+      regeneratePdf: vi.fn(),
+    },
   },
 }));
 

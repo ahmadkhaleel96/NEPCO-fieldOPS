@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/work-permits', label: 'Work Permits', roles: ['admin', 'engineer'] },
   { to: '/inspections', label: 'Inspections', roles: ['admin', 'engineer'] },
   { to: '/follow-up-tasks', label: 'Follow-Up Tasks', roles: ['admin', 'engineer', 'team_leader'] },
+  { to: '/reports', label: 'Reports', roles: ['admin', 'engineer'] },
   { to: '/users', label: 'Users', roles: ['admin'] },
 ];
 
