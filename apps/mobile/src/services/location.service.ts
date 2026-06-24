@@ -118,6 +118,21 @@ async function flushQueue(): Promise<void> {
   }
 }
 
+/**
+ * Get the device's current GPS position as a one-shot snapshot.
+ * Requests foreground permission if not already granted.
+ */
+export async function getCurrentPosition(): Promise<{ lat: number; lng: number }> {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== 'granted') {
+    throw new Error('Location permission not granted');
+  }
+  const loc = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Balanced,
+  });
+  return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+}
+
 /** Returns the number of GPS points currently waiting to be flushed. */
 export function getPendingCount(): number {
   return _queue.length;

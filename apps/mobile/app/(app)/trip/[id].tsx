@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ApiClientWorkPermitDetail, ApiClientTrip } from '@fieldops/api-client';
 import { apiClient } from '../../../src/lib/api';
 import { scanNfcTag, isNfcSupported, NfcError } from '../../../src/services/nfc.service';
-import { startTracking, stopTracking, isTracking } from '../../../src/services/location.service';
+import { startTracking, stopTracking, isTracking, getCurrentPosition } from '../../../src/services/location.service';
 import { Colors } from '../../../src/styles/colors';
 import styles from './[id].styles';
 
@@ -42,12 +42,15 @@ export default function TripScreen() {
     setScanning(true);
     setError(null);
     try {
-      const { tag_id } = await scanNfcTag();
+      const [{ tag_id }, position] = await Promise.all([
+        scanNfcTag(),
+        getCurrentPosition(),
+      ]);
       const res = await apiClient.trips.start({
         tag_id,
         permit_id: permitId!,
-        lat: 0,
-        lng: 0,
+        lat: position.lat,
+        lng: position.lng,
         client_id: crypto.randomUUID(),
         client_timestamp: new Date().toISOString(),
       });
@@ -71,12 +74,15 @@ export default function TripScreen() {
     setScanning(true);
     setError(null);
     try {
-      const { tag_id } = await scanNfcTag();
+      const [{ tag_id }, position] = await Promise.all([
+        scanNfcTag(),
+        getCurrentPosition(),
+      ]);
       await apiClient.nfcEvents.recordArrival({
         tag_id,
         trip_id: trip.id,
-        lat: 0,
-        lng: 0,
+        lat: position.lat,
+        lng: position.lng,
         client_id: crypto.randomUUID(),
         client_timestamp: new Date().toISOString(),
       });
