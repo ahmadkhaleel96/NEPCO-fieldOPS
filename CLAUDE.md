@@ -66,6 +66,7 @@ docker-compose -f infra/docker-compose.yml up -d    # start Postgres + Redis loc
 ### Schema-first, single source of truth
 
 All data shapes are defined **once** in `packages/shared` as Zod schemas. The same schema object validates:
+
 - Server-side (API middleware)
 - Client-side forms (React Hook Form + `@hookform/resolvers`)
 - TypeScript types (`z.infer<typeof Schema>`)
@@ -75,6 +76,7 @@ Never duplicate a validation rule. If the shape changes, change it in `packages/
 ### Three-layer security enforcement
 
 Every privileged action is blocked at three independent layers:
+
 1. **JWT role claim** — extracted from token, checked in API middleware (`requireRole()`)
 2. **Hono route handler** — business logic validates ownership and state
 3. **Supabase RLS policy** — enforced at the database layer (cannot be bypassed by the API)
@@ -98,6 +100,7 @@ The mobile app uses WatermelonDB for local storage. All writes (GPS points, NFC 
 ## Styling Rules (MANDATORY)
 
 ### Web (`apps/web`)
+
 - **All CSS goes in `.css` files** — no inline `style` attributes, no `style={{}}` props, ever.
 - Use **CSS Modules** for component-scoped styles (`ComponentName.module.css` in the same directory as the component).
 - Global design tokens are CSS custom properties in `src/styles/variables.css`.
@@ -105,6 +108,7 @@ The mobile app uses WatermelonDB for local storage. All writes (GPS points, NFC 
 - Never add a `style` prop to a JSX element. Use class names only.
 
 ### Mobile (`apps/mobile`)
+
 - **All styles go in `StyleSheet.create()` objects in separate files** — no inline style objects ever.
 - The style files live in `src/styles/` (for global tokens) or alongside the component as `ComponentName.styles.ts`.
 - Design tokens: `src/styles/colors.ts`, `src/styles/typography.ts`, `src/styles/spacing.ts`.
@@ -116,14 +120,15 @@ The mobile app uses WatermelonDB for local storage. All writes (GPS points, NFC 
 
 Every feature must have tests. Minimum coverage thresholds are enforced by CI and will fail the build:
 
-| Workspace | Lines | Branches | Functions |
-|---|---|---|---|
-| `packages/shared` | 90% | 85% | 90% |
-| `apps/api` | 85% | 80% | 85% |
-| `apps/web` | 80% | 75% | 80% |
-| `apps/mobile` | 80% | 75% | 80% |
+| Workspace         | Lines | Branches | Functions |
+| ----------------- | ----- | -------- | --------- |
+| `packages/shared` | 90%   | 85%      | 90%       |
+| `apps/api`        | 85%   | 80%      | 85%       |
+| `apps/web`        | 80%   | 75%      | 80%       |
+| `apps/mobile`     | 80%   | 75%      | 80%       |
 
 Test conventions:
+
 - Test files live in `src/__tests__/` subdirectories (or `__tests__/` adjacent to the source)
 - Name test files `*.test.ts` or `*.test.tsx`
 - Mock all external services (Supabase, Redis, Expo modules) — never make real network calls in tests
@@ -136,17 +141,20 @@ Test conventions:
 ## Cross-Platform Requirements
 
 The app must work on:
+
 - **Windows** (web app via Cloudflare Pages, Expo via EAS Build)
 - **macOS** (web app + Expo dev/build environment)
 - **iOS** (Expo managed workflow, NFC entitlement required)
 - **Android** (Expo managed workflow, NFC permission required)
 
 NFC:
+
 - iOS: requires `NFCReaderUsageDescription` in `app.json` + NFC entitlement in EAS profile
 - Android: requires `NFC` permission in `app.json`
 - Both handled by `expo-nfc`
 
 GPS background tracking:
+
 - iOS: requires `NSLocationAlwaysAndWhenInUseUsageDescription` + background location entitlement
 - Android: requires `ACCESS_BACKGROUND_LOCATION` permission
 - Both handled by `expo-location`
@@ -157,21 +165,21 @@ GPS background tracking:
 
 All secrets live in Infisical (production). For local development, copy `.env.example` → `.env.local`.
 
-| Variable | Used by | Purpose |
-|---|---|---|
-| `SUPABASE_URL` | `apps/api` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | `apps/api` | Public anon key (validates user JWTs) |
-| `SUPABASE_SERVICE_ROLE_KEY` | `apps/api` | **Secret** — bypasses RLS, never expose to clients |
-| `UPSTASH_REDIS_REST_URL` | `apps/api` | Rate limiting + BullMQ |
-| `UPSTASH_REDIS_REST_TOKEN` | `apps/api` | Rate limiting + BullMQ |
-| `VITE_SUPABASE_URL` | `apps/web` | Supabase URL (public) |
-| `VITE_SUPABASE_ANON_KEY` | `apps/web` | Supabase anon key (public) |
-| `VITE_MAPBOX_TOKEN` | `apps/web` | Mapbox map picker |
-| `EXPO_PUBLIC_SUPABASE_URL` | `apps/mobile` | Supabase URL (public) |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `apps/mobile` | Supabase anon key (public) |
-| `R2_*` | `apps/api` | Cloudflare R2 photo + report storage |
-| `RESEND_API_KEY` | `apps/api` | Email delivery |
-| `TWILIO_*` | `apps/api` | SMS fallback |
+| Variable                        | Used by       | Purpose                                            |
+| ------------------------------- | ------------- | -------------------------------------------------- |
+| `SUPABASE_URL`                  | `apps/api`    | Supabase project URL                               |
+| `SUPABASE_ANON_KEY`             | `apps/api`    | Public anon key (validates user JWTs)              |
+| `SUPABASE_SERVICE_ROLE_KEY`     | `apps/api`    | **Secret** — bypasses RLS, never expose to clients |
+| `UPSTASH_REDIS_REST_URL`        | `apps/api`    | Rate limiting + BullMQ                             |
+| `UPSTASH_REDIS_REST_TOKEN`      | `apps/api`    | Rate limiting + BullMQ                             |
+| `VITE_SUPABASE_URL`             | `apps/web`    | Supabase URL (public)                              |
+| `VITE_SUPABASE_ANON_KEY`        | `apps/web`    | Supabase anon key (public)                         |
+| `VITE_MAPBOX_TOKEN`             | `apps/web`    | Mapbox map picker                                  |
+| `EXPO_PUBLIC_SUPABASE_URL`      | `apps/mobile` | Supabase URL (public)                              |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `apps/mobile` | Supabase anon key (public)                         |
+| `R2_*`                          | `apps/api`    | Cloudflare R2 photo + report storage               |
+| `RESEND_API_KEY`                | `apps/api`    | Email delivery                                     |
+| `TWILIO_*`                      | `apps/api`    | SMS fallback                                       |
 
 **Never** commit any real secret. The `.gitignore` blocks `.env.*` files (except `.env.example`).
 
@@ -199,6 +207,7 @@ POST   /resource/:id/action  state transitions (e.g., /work-permits/:id/withdraw
 ```
 
 All responses follow:
+
 ```json
 { "success": true, "data": {...} }
 { "success": false, "error": { "code": "...", "message": "..." } }
@@ -208,17 +217,17 @@ All responses follow:
 
 ## Build Plan Phases
 
-| Phase | Status | Description |
-|---|---|---|
-| **0** | ✅ Sprint 0 | Foundation & Security Baseline |
-| **1** | 🔜 Next | Core Data & Identity (users, assets, vehicles, NFC provisioning) |
-| **2** | Pending | Permit Workflow (create, notifications, withdrawal) |
-| **3** | Pending | Field Operations: NFC + GPS |
-| **4** | Pending | Inspection Submission & Engineer Approval |
-| **5** | Pending | Trip Closure & Data Sealing |
-| **6** | Pending | Reporting Engine & Three-Copy Fallback |
-| **7** | Parallel | Security Hardening & Audit |
-| **8** | Parallel | Deployment & Operations |
+| Phase | Status      | Description                                                      |
+| ----- | ----------- | ---------------------------------------------------------------- | --- |
+| **0** | ✅ Sprint 0 | Foundation & Security Baseline                                   |
+| **1** | 🔜 Next     | Core Data & Identity (users, assets, vehicles, NFC provisioning) |
+| **2** | Pending     | Permit Workflow (create, notifications, withdrawal)              |
+| **3** | Pending     | Field Operations: NFC + GPS                                      |
+| **4** | Pending     | Inspection Submission & Engineer Approval                        |
+| **5** | Pending     | Trip Closure & Data Sealing                                      |
+| **6** | Pending     | Reporting Engine & Three-Copy Fallback                           |
+| **7** | Parallel    | Security Hardening & Audit                                       |
+| **8** | Parallel    | Deployment & Operations                                          | 22  |
 
 Full build plan: see `plan.pdf` (provided by project owner).
 
@@ -226,31 +235,15 @@ Full build plan: see `plan.pdf` (provided by project owner).
 
 ## Key Files Reference
 
-| File | Purpose |
-|---|---|
-| `packages/shared/src/index.ts` | All exported schemas and types |
-| `packages/shared/src/constants.ts` | Security constants (TTLs, limits, thresholds) |
-| `apps/api/src/app.ts` | Hono app factory (middleware, routes, error handler) |
-| `apps/api/src/middleware/auth.middleware.ts` | JWT validation + `requireRole()` guard |
-| `apps/api/src/middleware/error.middleware.ts` | Global error → structured response |
-| `apps/web/src/styles/variables.css` | CSS design tokens |
-| `apps/mobile/src/styles/colors.ts` | Mobile colour palette |
-| `docs/threat-model.md` | OWASP/STRIDE threat analysis — review before major features |
-| `infra/migrations/017_create_rls_policies.sql` | Row-Level Security policies |
-| `infra/migrations/013_create_asset_history.sql` | Append-only trigger + approval automation |
-
----
-
-## Known Dependency Constraints
-
-### React version pinning
-
-`react-native@0.74.x` hard-pins `react@18.2.0` as a direct dependency, which npm hoists to the root `node_modules`. All workspaces must use `react@18.2.0` (and `react-dom@18.2.0`) to avoid dual-instance errors. **Do not upgrade React in `apps/web` to `18.3.x` or later** without first removing `react-native` from the root dedupe constraint.
-
-### Vitest React deduplication (`apps/web`)
-
-`apps/web/vitest.config.ts` uses `resolve.alias` + `resolve.dedupe` + `server.deps.inline` to ensure `@tanstack/react-query` and the test environment share a single React instance. If you see `TypeError: Cannot read properties of null (reading 'useEffect')` in web tests, it is a dual-React-instance problem — check that the alias paths in `vitest.config.ts` still point to the correct local `node_modules/react` copy.
-
-### Hono context typing
-
-Every `OpenAPIHono` router that uses `authMiddleware` must be typed as `new OpenAPIHono<{ Variables: AuthVariables }>()`. Without this, `c.get('userId')` and `c.get('userRole')` will fail TypeScript type-checking. `AuthVariables` is exported from `apps/api/src/middleware/auth.middleware.ts`.
+| File                                            | Purpose                                                     |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| `packages/shared/src/index.ts`                  | All exported schemas and types                              |
+| `packages/shared/src/constants.ts`              | Security constants (TTLs, limits, thresholds)               |
+| `apps/api/src/app.ts`                           | Hono app factory (middleware, routes, error handler)        |
+| `apps/api/src/middleware/auth.middleware.ts`    | JWT validation + `requireRole()` guard                      |
+| `apps/api/src/middleware/error.middleware.ts`   | Global error → structured response                          |
+| `apps/web/src/styles/variables.css`             | CSS design tokens                                           |
+| `apps/mobile/src/styles/colors.ts`              | Mobile colour palette                                       |
+| `docs/threat-model.md`                          | OWASP/STRIDE threat analysis — review before major features |
+| `infra/migrations/017_create_rls_policies.sql`  | Row-Level Security policies                                 |
+| `infra/migrations/013_create_asset_history.sql` | Append-only trigger + approval automation                   |

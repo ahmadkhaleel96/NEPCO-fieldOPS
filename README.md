@@ -1,8 +1,8 @@
-# NEPCO FieldOps
+2# NEPCO FieldOps
 
 Field Operation Management System for the National Electric Power Company (NEPCO).
 
-**Priority order:** Security first · Cost second · Cross-platform (PC + Android + iOS) throughout  
+**Priority order:** Security first · Cost second · Cross-platform (PC + Android + iOS) throughout
 **Methodology:** Agile — phased delivery, each phase is a sprint
 
 ---
@@ -46,31 +46,31 @@ nepco-fieldops/                     ← Turborepo monorepo root
 
 ## Tech Stack
 
-| Concern | Technology | Why |
-|---|---|---|
-| Monorepo | **Turborepo** | Shared types/schemas between web, mobile, API |
-| Web app | **React 18 + Vite** | Fast dev server, PC-optimised dashboard |
-| Mobile app | **Expo 51 (React Native)** | OTA updates, NFC module, managed push notifications |
-| API server | **Hono** | TypeScript-first, edge-compatible, small attack surface |
-| Database | **Supabase Pro (PostgreSQL 15 + PostGIS)** | Built-in RLS, realtime, backups |
-| Auth | **Supabase Auth** | Email+password, MFA for admin/engineer, JWT role claims |
-| Validation | **Zod** | Single schema used on client AND server |
-| Mobile offline | **WatermelonDB** | Conflict resolution, observable queries, offline-first |
-| Job queue | **BullMQ + Upstash Redis** | Report generation, push notification delivery |
-| Push notifications | **Expo Notifications** | FCM (Android) + APNs (iOS) from one API |
-| Maps | **Mapbox GL JS** (web) | Asset picker map, GPS track rendering |
-| Photo storage | **Cloudflare R2** | EXIF-embedded photos, pre-signed PUT |
-| PDF generation | **Puppeteer** | Self-contained reports (no external URLs) |
-| Email | **Resend** | Delivery tracking, webhooks, free tier |
-| SMS fallback | **Twilio** | Push delivery failure fallback only |
-| Secrets | **Infisical** | Never in `.env` files, automatic rotation |
-| Error tracking | **Sentry** | Web + React Native SDK |
-| Uptime | **Better Uptime** | API health + BullMQ queue depth monitoring |
-| Logging | **Logtail** (Better Stack) | Structured JSON logs, privacy-preserving |
-| CI/CD | **GitHub Actions** | lint → type-check → test → OWASP ZAP → deploy |
-| Web deploy | **Cloudflare Pages** | Global CDN, automatic HTTPS |
-| API deploy | **Railway** | Zero-downtime deployments |
-| Mobile builds | **EAS Build + EAS Update** | APK/IPA in CI, OTA JS bundle updates |
+| Concern            | Technology                                 | Why                                                     |
+| ------------------ | ------------------------------------------ | ------------------------------------------------------- |
+| Monorepo           | **Turborepo**                              | Shared types/schemas between web, mobile, API           |
+| Web app            | **React 18 + Vite**                        | Fast dev server, PC-optimised dashboard                 |
+| Mobile app         | **Expo 51 (React Native)**                 | OTA updates, NFC module, managed push notifications     |
+| API server         | **Hono**                                   | TypeScript-first, edge-compatible, small attack surface |
+| Database           | **Supabase Pro (PostgreSQL 15 + PostGIS)** | Built-in RLS, realtime, backups                         |
+| Auth               | **Supabase Auth**                          | Email+password, MFA for admin/engineer, JWT role claims |
+| Validation         | **Zod**                                    | Single schema used on client AND server                 |
+| Mobile offline     | **WatermelonDB**                           | Conflict resolution, observable queries, offline-first  |
+| Job queue          | **BullMQ + Upstash Redis**                 | Report generation, push notification delivery           |
+| Push notifications | **Expo Notifications**                     | FCM (Android) + APNs (iOS) from one API                 |
+| Maps               | **Mapbox GL JS** (web)                     | Asset picker map, GPS track rendering                   |
+| Photo storage      | **Cloudflare R2**                          | EXIF-embedded photos, pre-signed PUT                    |
+| PDF generation     | **Puppeteer**                              | Self-contained reports (no external URLs)               |
+| Email              | **Resend**                                 | Delivery tracking, webhooks, free tier                  |
+| SMS fallback       | **Twilio**                                 | Push delivery failure fallback only                     |
+| Secrets            | **Infisical**                              | Never in `.env` files, automatic rotation               |
+| Error tracking     | **Sentry**                                 | Web + React Native SDK                                  |
+| Uptime             | **Better Uptime**                          | API health + BullMQ queue depth monitoring              |
+| Logging            | **Logtail** (Better Stack)                 | Structured JSON logs, privacy-preserving                |
+| CI/CD              | **GitHub Actions**                         | lint → type-check → test → OWASP ZAP → deploy           |
+| Web deploy         | **Cloudflare Pages**                       | Global CDN, automatic HTTPS                             |
+| API deploy         | **Railway**                                | Zero-downtime deployments                               |
+| Mobile builds      | **EAS Build + EAS Update**                 | APK/IPA in CI, OTA JS bundle updates                    |
 
 ---
 
@@ -98,8 +98,8 @@ cp .env.example .env.local
 # Fill in all values — see .env.example for descriptions
 ```
 
-The web app uses `VITE_` prefixed variables.  
-The mobile app uses `EXPO_PUBLIC_` prefixed variables.  
+The web app uses `VITE_` prefixed variables.
+The mobile app uses `EXPO_PUBLIC_` prefixed variables.
 The API uses server-side environment variables (never exposed to clients).
 
 ### 3. Run database migrations
@@ -115,7 +115,7 @@ Or apply each file manually via the Supabase SQL editor in order from `001_` to 
 
 ### 4. Register the Auth hook
 
-In the Supabase dashboard: **Authentication → Hooks → Custom Access Token Hook**  
+In the Supabase dashboard: **Authentication → Hooks → Custom Access Token Hook**
 Set the function to `public.inject_role_claim` (created by migration 018).
 
 ---
@@ -124,15 +124,15 @@ Set the function to `public.inject_role_claim` (created by migration 018).
 
 All commands run from the repo root using Turborepo.
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start all apps in development mode (parallel) |
-| `npm run build` | Build all workspaces |
-| `npm run test` | Run all test suites |
-| `npm run test:coverage` | Run tests with coverage reports |
-| `npm run type-check` | TypeScript type-check all workspaces |
-| `npm run lint` | ESLint all workspaces |
-| `npm run format` | Prettier format all files |
+| Command                 | Description                                   |
+| ----------------------- | --------------------------------------------- |
+| `npm run dev`           | Start all apps in development mode (parallel) |
+| `npm run build`         | Build all workspaces                          |
+| `npm run test`          | Run all test suites                           |
+| `npm run test:coverage` | Run tests with coverage reports               |
+| `npm run type-check`    | TypeScript type-check all workspaces          |
+| `npm run lint`          | ESLint all workspaces                         |
+| `npm run format`        | Prettier format all files                     |
 
 ### Per-workspace commands
 
@@ -186,13 +186,13 @@ npm run build:ios
 
 ## User Roles
 
-| Role | Platform | Permissions |
-|---|---|---|
-| `admin` | Web | Create users, provision NFC tags, revoke sessions, all data |
-| `engineer` | Web (primary) | Create/issue permits, approve asset changes, view reports |
-| `team_leader` | Mobile | Accept permits, lead site operations |
-| `technician` | Mobile | Accept permits, submit inspections |
-| `driver` | Mobile | Accept permits, initiate/end trips via NFC scan |
+| Role          | Platform      | Permissions                                                 |
+| ------------- | ------------- | ----------------------------------------------------------- |
+| `admin`       | Web           | Create users, provision NFC tags, revoke sessions, all data |
+| `engineer`    | Web (primary) | Create/issue permits, approve asset changes, view reports   |
+| `team_leader` | Mobile        | Accept permits, lead site operations                        |
+| `technician`  | Mobile        | Accept permits, submit inspections                          |
+| `driver`      | Mobile        | Accept permits, initiate/end trips via NFC scan             |
 
 Role boundaries are enforced at three layers: JWT claim → API middleware → Supabase RLS.
 
@@ -221,6 +221,7 @@ Role boundaries are enforced at three layers: JWT claim → API middleware → S
 See [docs/threat-model.md](docs/threat-model.md) for the full OWASP/STRIDE analysis.
 
 Key points:
+
 - **MFA mandatory** for `admin` and `engineer` roles (TOTP)
 - **JWT access tokens** expire in 15 minutes; refresh tokens rotate on every use
 - **Web tokens** stored in memory only; refresh token in `httpOnly` cookie
@@ -264,12 +265,12 @@ Key points:
 
 Each workspace has its own test runner and coverage requirements:
 
-| Workspace | Runner | Coverage target |
-|---|---|---|
-| `packages/shared` | Vitest | ≥ 90% lines |
-| `apps/api` | Vitest | ≥ 85% lines |
-| `apps/web` | Vitest + jsdom | ≥ 80% lines |
-| `apps/mobile` | Jest + jest-expo | ≥ 80% lines |
+| Workspace         | Runner           | Coverage target |
+| ----------------- | ---------------- | --------------- |
+| `packages/shared` | Vitest           | ≥ 90% lines     |
+| `apps/api`        | Vitest           | ≥ 85% lines     |
+| `apps/web`        | Vitest + jsdom   | ≥ 80% lines     |
+| `apps/mobile`     | Jest + jest-expo | ≥ 80% lines     |
 
 Coverage reports are generated in each workspace's `coverage/` directory.
 
@@ -277,16 +278,16 @@ Coverage reports are generated in each workspace's `coverage/` directory.
 
 ## Sprint Log
 
-### Sprint 0 — Phase 0: Foundation & Security Baseline ✅ (2026-04-15)
+### Sprint 0 — Phase 0: Foundation & Security Baseline ✅ (2026-04-14)
 
 - [x] **0.1** Threat model (OWASP/STRIDE) → `docs/threat-model.md`
 - [x] **0.2** Turborepo monorepo: `apps/web`, `apps/mobile`, `apps/api`, `packages/shared`, `packages/api-client`
 - [x] **0.3** Database migrations 001–018 (all tables, RLS policies, triggers, auth hook)
 - [x] **0.4** Auth middleware (JWT validation, role extraction, `requireRole` guard)
 - [x] **0.5** Hono API skeleton: all route stubs with Zod validation, rate limiting, structured logging, error handling
-- [x] **0.6** All test suites green (shared 140 tests, API 21 tests, web 3 tests, mobile 9 tests); zero TypeScript errors across all workspaces
 
 **Next sprint: Phase 1 — Core Data & Identity**
+
 - 1.1 Admin panel: user management UI
 - 1.2 Asset registry: bulk CSV import, Mapbox map view
 - 1.3 Vehicle registry
