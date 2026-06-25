@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import { ProvisionNfcTagSchema, ConfirmNfcTagInstallSchema, PaginationQuerySchema } from '@fieldops/shared';
@@ -70,7 +71,7 @@ nfcTagsRoutes.post('/', requireRole('admin'), async (c) => {
   }
 
   const { tag_id, asset_id, vehicle_id } = parsed.data;
-  const provisionedBy = c.get('userId');
+  const provisionedBy = c.get('userProfileId');
 
   // Check tag_id is not already registered
   const { data: existing } = await supabaseAdmin
@@ -83,11 +84,18 @@ nfcTagsRoutes.post('/', requireRole('admin'), async (c) => {
     throw new HTTPException(409, { message: 'This tag ID is already registered' });
   }
 
-  // In production: generate a random 4-byte password and store in Supabase Vault.
-  // The vault_secret_id returned here is the Vault reference — not the password.
-  // For now, we store a placeholder; the actual Vault integration requires
-  // the Supabase Management API to create a vault secret.
-  const vaultSecretId = `vault:nfc:${tag_id}:${Date.now()}`;
+  // Generate a cryptographically random 4-byte NTAG write password and store
+  // it in Supabase Vault. The returned UUID is stored as the vault reference;
+  // the plaintext password is never held in application memory beyond this block.
+  const passwordHex = randomBytes(4).toString('hex').toUpperCase();
+  const { data: vaultId, error: vaultError } = await supabaseAdmin.rpc('nfc_vault_create', {
+    p_secret: passwordHex,
+    p_name: `nfc-${tag_id}`,
+  });
+  if (vaultError || !vaultId) {
+    throw new HTTPException(500, { message: 'Failed to create vault secret' });
+  }
+  const vaultSecretId = vaultId as string;
 
   const { data, error } = await supabaseAdmin
     .from('nfc_tags')
@@ -170,4 +178,30 @@ nfcTagsRoutes.patch('/:id/confirm-install', requireRole('admin'), async (c) => {
   const { vault_secret_id: _, ...safeData } = data as Record<string, unknown> & { vault_secret_id: unknown };
 
   return c.json({ success: true, data: safeData });
+});
+
+/**
+ * GET /nfc-tags/:id/write-password — retrieve the NTAG write password (admin only)
+ * Used by provisioning tooling to program the physical tag. Never logged or cached.
+ */
+nfcTagsRoutes.get('/:id/write-password', requireRole('admin'), async (c) => {
+  validateUuid(c.req.param('id'));
+
+  const { data: tag, error: tagError } = await supabaseAdmin
+    .from('nfc_tags')
+    .select('vault_secret_id')
+    .eq('id', c.req.param('id'))
+    .single();
+
+  if (tagError || !tag) throw new HTTPException(404, { message: 'NFC tag not found' });
+
+  const { data: password, error: vaultError } = await supabaseAdmin.rpc('nfc_vault_read', {
+    p_id: (tag as { vault_secret_id: string }).vault_secret_id,
+  });
+
+  if (vaultError || !password) {
+    throw new HTTPException(500, { message: 'Failed to retrieve write password' });
+  }
+
+  return c.json({ success: true, data: { write_password: password as string } });
 });

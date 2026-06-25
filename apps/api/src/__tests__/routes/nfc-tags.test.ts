@@ -8,6 +8,7 @@ vi.mock('../../lib/supabase', () => ({
   },
   supabaseAdmin: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }));
 
@@ -54,8 +55,7 @@ type MockChain = {
   [key: string]: unknown;
 };
 
-function mockFromChain(overrides: Record<string, unknown> = {}, resolveWith?: unknown): MockChain {
-  // Use explicit chain reference (not mockReturnThis) — Vite SSR transform loses `this` binding
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select: vi.fn().mockImplementation(() => chain),
@@ -71,8 +71,24 @@ function mockFromChain(overrides: Record<string, unknown> = {}, resolveWith?: un
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) => Promise.resolve(resolveWith).then(resolve, reject);
   }
+  return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
   vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
   return chain;
+}
+
+/**
+ * Sets up the auth middleware's profile lookup as the next `from()` call.
+ * Must be called before any route-specific from() mocks.
+ */
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 const V_TAG = 'cccccccc-0000-0000-0000-000000000001';
@@ -96,16 +112,18 @@ const MOCK_TAG = {
 
 describe('GET /nfc-tags', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for technician role', async () => {
     mockAuthUser('technician');
+    mockUserProfile();
     const res = await app.request('/nfc-tags', { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('returns paginated tag list for engineer', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     mockFromChain({}, { data: [MOCK_TAG], count: 1, error: null });
 
     const res = await app.request('/nfc-tags', { headers: authHeader() });
@@ -119,10 +137,11 @@ describe('GET /nfc-tags', () => {
 
 describe('POST /nfc-tags', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await app.request('/nfc-tags', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -133,6 +152,7 @@ describe('POST /nfc-tags', () => {
 
   it('returns 422 when neither asset_id nor vehicle_id provided', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await app.request('/nfc-tags', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -145,6 +165,7 @@ describe('POST /nfc-tags', () => {
 
   it('returns 422 when both asset_id and vehicle_id provided', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await app.request('/nfc-tags', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -155,10 +176,8 @@ describe('POST /nfc-tags', () => {
 
   it('returns 409 when tag_id already registered', async () => {
     mockAuthUser('admin');
-    const existingChain = {} as MockChain;
-    Object.assign(existingChain, {
-      select: vi.fn().mockImplementation(() => existingChain),
-      eq: vi.fn().mockImplementation(() => existingChain),
+    mockUserProfile();
+    const existingChain = makeChain({
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'existing' }, error: null }),
     });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(existingChain as unknown as ReturnType<typeof supabaseAdmin.from>);
@@ -173,19 +192,16 @@ describe('POST /nfc-tags', () => {
 
   it('provisions tag and returns 201', async () => {
     mockAuthUser('admin');
-    // First call: maybeSingle returns null (tag not registered)
-    const checkChain = {} as MockChain;
-    Object.assign(checkChain, {
-      select: vi.fn().mockImplementation(() => checkChain),
-      eq: vi.fn().mockImplementation(() => checkChain),
+    mockUserProfile();
+    // 1: duplicate check — tag not registered
+    const checkChain = makeChain({
       maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(checkChain as unknown as ReturnType<typeof supabaseAdmin.from>);
-    // Second call: insert
-    const insertChain = {} as MockChain;
-    Object.assign(insertChain, {
-      insert: vi.fn().mockImplementation(() => insertChain),
-      select: vi.fn().mockImplementation(() => insertChain),
+    // 2: vault RPC returns a UUID
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: 'vault-uuid-1234', error: null } as never);
+    // 3: insert the tag row
+    const insertChain = makeChain({
       single: vi.fn().mockResolvedValue({ data: MOCK_TAG, error: null }),
     });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(insertChain as unknown as ReturnType<typeof supabaseAdmin.from>);
@@ -200,14 +216,32 @@ describe('POST /nfc-tags', () => {
     expect(body.success).toBe(true);
     expect(body.data.tag_id).toBe('ABCD1234');
   });
+
+  it('returns 500 when vault RPC fails', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const checkChain = makeChain({
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(checkChain as unknown as ReturnType<typeof supabaseAdmin.from>);
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: null, error: { message: 'vault error' } } as never);
+
+    const res = await app.request('/nfc-tags', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag_id: 'ABCD1234', asset_id: '00000000-0000-0000-0000-000000000001' }),
+    });
+    expect(res.status).toBe(500);
+  });
 });
 
 describe('GET /nfc-tags/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 404 when not found', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
     });
@@ -217,6 +251,7 @@ describe('GET /nfc-tags/:id', () => {
 
   it('returns tag without vault_secret_id', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: MOCK_TAG, error: null }),
     });
@@ -228,12 +263,62 @@ describe('GET /nfc-tags/:id', () => {
   });
 });
 
-describe('PATCH /nfc-tags/:id/confirm-install', () => {
+describe('GET /nfc-tags/:id/write-password', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
+    const res = await app.request(`/nfc-tags/${V_TAG}/write-password`, { headers: authHeader() });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when tag not found', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+    });
+    const res = await app.request(`/nfc-tags/${V_NOT_FOUND}/write-password`, { headers: authHeader() });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns write password for admin', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: { vault_secret_id: 'vault-uuid-1234' }, error: null }),
+    });
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: 'A1B2C3D4', error: null } as never);
+
+    const res = await app.request(`/nfc-tags/${V_TAG}/write-password`, { headers: authHeader() });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; data: { write_password: string } };
+    expect(body.success).toBe(true);
+    expect(body.data.write_password).toBe('A1B2C3D4');
+  });
+
+  it('returns 500 when vault read fails', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: { vault_secret_id: 'vault-uuid-1234' }, error: null }),
+    });
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: null, error: { message: 'vault error' } } as never);
+
+    const res = await app.request(`/nfc-tags/${V_TAG}/write-password`, { headers: authHeader() });
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('PATCH /nfc-tags/:id/confirm-install', () => {
+  let app: ReturnType<typeof makeApp>;
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
+
+  it('returns 403 for engineer role', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
     const res = await app.request(`/nfc-tags/${V_TAG}/confirm-install`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -244,6 +329,7 @@ describe('PATCH /nfc-tags/:id/confirm-install', () => {
 
   it('returns 422 for invalid photo_url', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await app.request(`/nfc-tags/${V_TAG}/confirm-install`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -254,11 +340,11 @@ describe('PATCH /nfc-tags/:id/confirm-install', () => {
 
   it('confirms installation and returns active tag', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const activeTag = { ...MOCK_TAG, status: 'active', install_lat: 31.9, install_lng: 35.9 };
-    const chain = mockFromChain({
+    mockFromChain({
       single: vi.fn().mockResolvedValue({ data: activeTag, error: null }),
     });
-    chain.select.mockImplementation(() => chain);
 
     const res = await app.request(`/nfc-tags/${V_TAG}/confirm-install`, {
       method: 'PATCH',
