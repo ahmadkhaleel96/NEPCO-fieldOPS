@@ -156,6 +156,30 @@ vi.mock('../lib/api-client', () => ({
   },
 }));
 
+// Mock mapbox-gl — WebGL not available in jsdom
+vi.mock('mapbox-gl', () => ({
+  default: {
+    accessToken: '',
+    Map: vi.fn().mockImplementation(() => ({
+      addControl: vi.fn(),
+      on: vi.fn(),
+      remove: vi.fn(),
+      flyTo: vi.fn(),
+      isStyleLoaded: vi.fn().mockReturnValue(true),
+    })),
+    Marker: vi.fn().mockImplementation(() => ({
+      setLngLat: vi.fn().mockReturnThis(),
+      addTo: vi.fn().mockReturnThis(),
+      on: vi.fn().mockReturnThis(),
+      remove: vi.fn(),
+      getLngLat: vi.fn().mockReturnValue({ lat: 31.95, lng: 35.91 }),
+    })),
+    NavigationControl: vi.fn(),
+    LngLat: vi.fn().mockImplementation((lng: number, lat: number) => ({ lng, lat })),
+  },
+}));
+
 // Mock import.meta.env
 vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co');
 vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-anon-key');
+vi.stubEnv('VITE_MAPBOX_TOKEN', 'pk.test-token');

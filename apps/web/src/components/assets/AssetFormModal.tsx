@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import type { ApiClientAsset } from '@fieldops/api-client';
 import styles from './AssetFormModal.module.css';
 
@@ -36,13 +38,21 @@ const ASSET_TYPE_OPTIONS = [
   { value: 'distribution_cabinet', label: 'Distribution Cabinet' },
 ] as const;
 
+// Default center: Amman, Jordan
+const DEFAULT_CENTER: [number, number] = [35.9106, 31.9539];
+
 export function AssetFormModal({ asset, onSubmit, onClose, isSubmitting }: AssetFormModalProps) {
   const isEdit = !!asset;
+
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<AssetFormValues>({
     resolver: zodResolver(assetFormSchema),
@@ -57,6 +67,7 @@ export function AssetFormModal({ asset, onSubmit, onClose, isSubmitting }: Asset
       : undefined,
   });
 
+  // Sync form when asset prop changes
   useEffect(() => {
     if (asset) {
       reset({
@@ -70,6 +81,57 @@ export function AssetFormModal({ asset, onSubmit, onClose, isSubmitting }: Asset
       reset({});
     }
   }, [asset, reset]);
+
+  // Initialise Mapbox once per modal mount
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    mapboxgl.accessToken = import.meta.env['VITE_MAPBOX_TOKEN'] ?? '';
+
+    const initialCenter: [number, number] = asset
+      ? [asset.longitude, asset.latitude]
+      : DEFAULT_CENTER;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      center: initialCenter,
+      zoom: asset ? 14 : 7,
+    });
+
+    mapRef.current = map;
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    function placeOrMoveMarker(lngLat: mapboxgl.LngLat) {
+      const lat = parseFloat(lngLat.lat.toFixed(6));
+      const lng = parseFloat(lngLat.lng.toFixed(6));
+      setValue('latitude', lat, { shouldValidate: true });
+      setValue('longitude', lng, { shouldValidate: true });
+
+      if (markerRef.current) {
+        markerRef.current.setLngLat(lngLat);
+      } else {
+        const marker = new mapboxgl.Marker({ draggable: true })
+          .setLngLat(lngLat)
+          .addTo(map);
+        marker.on('dragend', () => placeOrMoveMarker(marker.getLngLat()));
+        markerRef.current = marker;
+      }
+    }
+
+    if (asset) {
+      placeOrMoveMarker(new mapboxgl.LngLat(asset.longitude, asset.latitude));
+    }
+
+    map.on('click', (e) => placeOrMoveMarker(e.lngLat));
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally only runs on mount
 
   function onValid(values: AssetFormValues) {
     onSubmit({ ...values, metadata: asset?.metadata ?? {} });
@@ -132,6 +194,12 @@ export function AssetFormModal({ asset, onSubmit, onClose, isSubmitting }: Asset
               placeholder="Descriptive name"
             />
             {errors.name && <span className={styles.error}>{errors.name.message}</span>}
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Location</label>
+            <div ref={mapContainerRef} className={styles.mapContainer} />
+            <p className={styles.mapHint}>Click the map or drag the marker to set the asset location.</p>
           </div>
 
           <div className={styles.row}>
