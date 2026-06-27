@@ -25,6 +25,15 @@ jest.mock('../lib/api', () => ({
   },
 }));
 
+// ─── offline queue service ────────────────────────────────────────────────────
+const mockEnqueue = jest.fn().mockResolvedValue(undefined);
+
+jest.mock('../services/offline-queue.service', () => ({
+  enqueue: (...args: unknown[]) => mockEnqueue(...args),
+  flush: jest.fn().mockResolvedValue(undefined),
+  getPendingCount: jest.fn().mockResolvedValue(0),
+}));
+
 // ─── crypto.randomUUID polyfill ───────────────────────────────────────────────
 Object.defineProperty(global, 'crypto', {
   value: { randomUUID: () => '00000000-0000-0000-0000-000000000099' },
@@ -59,10 +68,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUseLocalSearchParams.mockReturnValue({ assetId: 'asset-1', tripId: 'trip-1' });
   mockAssetsGet.mockResolvedValue({ success: true, data: MOCK_ASSET });
-  mockInspectionsSubmit.mockResolvedValue({
-    success: true,
-    data: { id: 'insp-1' },
-  });
+  mockInspectionsSubmit.mockResolvedValue({ success: true, data: { id: 'insp-1' } });
+  mockEnqueue.mockResolvedValue(undefined);
 });
 
 describe('InspectAssetScreen', () => {
@@ -227,8 +234,30 @@ describe('InspectAssetScreen', () => {
     });
   });
 
-  it('shows error text when submit fails', async () => {
+  it('queues inspection offline when submit fails and network is unavailable', async () => {
     mockInspectionsSubmit.mockRejectedValueOnce(new Error('Network error'));
+
+    render(<InspectAssetScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('submit-inspection-button')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('submit-inspection-button'));
+    });
+
+    await waitFor(() => {
+      expect(mockEnqueue).toHaveBeenCalledWith(
+        'inspection_submit',
+        expect.objectContaining({ asset_id: 'asset-1', trip_id: 'trip-1' }),
+      );
+    });
+  });
+
+  it('shows error text when submit and enqueue both fail', async () => {
+    mockInspectionsSubmit.mockRejectedValueOnce(new Error('Network error'));
+    mockEnqueue.mockRejectedValueOnce(new Error('Storage full'));
 
     render(<InspectAssetScreen />);
 

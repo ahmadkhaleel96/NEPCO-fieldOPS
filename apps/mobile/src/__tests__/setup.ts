@@ -101,4 +101,30 @@ jest.mock('../../services/location.service', () => ({
   isTracking: jest.fn().mockReturnValue(false),
   getPendingCount: jest.fn().mockReturnValue(0),
   requestLocationPermissions: jest.fn().mockResolvedValue(true),
+  getCurrentPosition: jest.fn().mockResolvedValue({ lat: 31.95, lng: 35.91 }),
+}));
+
+// ─── offline queue service ────────────────────────────────────────────────────
+jest.mock('../../services/offline-queue.service', () => ({
+  enqueue: jest.fn().mockResolvedValue(undefined),
+  flush: jest.fn().mockResolvedValue(undefined),
+  getPendingCount: jest.fn().mockResolvedValue(0),
+}));
+
+// ─── expo-file-system ─────────────────────────────────────────────────────────
+jest.mock('expo-file-system', () => ({
+  documentDirectory: 'file:///test/',
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
+  readAsStringAsync: jest.fn().mockResolvedValue('[]'),
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+// ─── @react-native-community/netinfo ─────────────────────────────────────────
+jest.mock('@react-native-community/netinfo', () => ({
+  default: {
+    addEventListener: jest.fn().mockReturnValue(jest.fn()),
+    fetch: jest.fn().mockResolvedValue({ isConnected: true }),
+  },
+  addEventListener: jest.fn().mockReturnValue(jest.fn()),
+  fetch: jest.fn().mockResolvedValue({ isConnected: true }),
 }));

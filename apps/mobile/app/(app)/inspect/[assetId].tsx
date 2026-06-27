@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ApiClientAsset, IncompleteReason, InspectionStatus } from '@fieldops/api-client';
 import { apiClient } from '../../../src/lib/api';
+import { enqueue } from '../../../src/services/offline-queue.service';
 import { Colors } from '../../../src/styles/colors';
 import styles from './[assetId].styles';
 
@@ -71,15 +72,19 @@ export default function InspectAssetScreen() {
 
     setSubmitting(true);
     setError(null);
+
+    const idempotencyKey = crypto.randomUUID();
+    const submitPayload = {
+      trip_id: tripId,
+      asset_id: asset.id,
+      status,
+      form_data: formData,
+      incomplete_reason: status === 'incomplete' ? (incompleteReason ?? undefined) : undefined,
+      idempotency_key: idempotencyKey,
+    };
+
     try {
-      await apiClient.assetInspections.submit({
-        trip_id: tripId,
-        asset_id: asset.id,
-        status,
-        form_data: formData,
-        incomplete_reason: status === 'incomplete' ? (incompleteReason ?? undefined) : undefined,
-        idempotency_key: crypto.randomUUID(),
-      });
+      await apiClient.assetInspections.submit(submitPayload);
 
       if (status === 'incomplete' && incompleteReason === 'safety_hazard') {
         Alert.alert(
@@ -93,7 +98,16 @@ export default function InspectAssetScreen() {
         ]);
       }
     } catch {
-      setError('Failed to submit inspection. Please try again.');
+      try {
+        await enqueue('inspection_submit', submitPayload as Record<string, unknown>);
+        Alert.alert(
+          'Offline',
+          'Inspection queued and will sync when connected.',
+          [{ text: 'OK', onPress: () => router.back() }],
+        );
+      } catch {
+        setError('Failed to submit inspection. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }

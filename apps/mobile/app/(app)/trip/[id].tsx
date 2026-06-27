@@ -5,6 +5,7 @@ import type { ApiClientWorkPermitDetail, ApiClientTrip } from '@fieldops/api-cli
 import { apiClient } from '../../../src/lib/api';
 import { scanNfcTag, isNfcSupported, NfcError } from '../../../src/services/nfc.service';
 import { startTracking, stopTracking, isTracking, getCurrentPosition } from '../../../src/services/location.service';
+import { enqueue } from '../../../src/services/offline-queue.service';
 import { Colors } from '../../../src/styles/colors';
 import styles from './[id].styles';
 
@@ -78,15 +79,21 @@ export default function TripScreen() {
         scanNfcTag(),
         getCurrentPosition(),
       ]);
-      await apiClient.nfcEvents.recordArrival({
+      const arrivalPayload = {
         tag_id,
         trip_id: trip.id,
         lat: position.lat,
         lng: position.lng,
         client_id: crypto.randomUUID(),
         client_timestamp: new Date().toISOString(),
-      });
-      Alert.alert('Site arrival recorded', 'NFC scan logged successfully.');
+      };
+      try {
+        await apiClient.nfcEvents.recordArrival(arrivalPayload);
+        Alert.alert('Site arrival recorded', 'NFC scan logged successfully.');
+      } catch {
+        await enqueue('nfc_arrival', arrivalPayload as Record<string, unknown>);
+        Alert.alert('Offline', 'Site arrival queued and will sync when connected.');
+      }
     } catch (err) {
       if (err instanceof NfcError) {
         setError(err.message);
