@@ -96,6 +96,7 @@ vi.mock('../lib/api-client', () => ({
       create: vi.fn(),
       update: vi.fn(),
       deactivate: vi.fn(),
+      bulkImport: vi.fn(),
     },
     users: {
       list: vi.fn().mockResolvedValue({

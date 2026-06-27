@@ -133,6 +133,20 @@ export interface UpdateAssetPayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface BulkImportAssetRow {
+  asset_code: string;
+  asset_type: AssetType;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface BulkImportResult {
+  imported: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+}
+
 export type WorkPermitStatus =
   | 'draft'
   | 'issued'
@@ -379,6 +393,8 @@ export class ApiClient {
         this.request<{ success: true; data: ApiClientAsset }>('PATCH', `/assets/${id}`, payload),
       deactivate: (id: string) =>
         this.request<{ success: true; data: ApiClientAsset }>('DELETE', `/assets/${id}`),
+      bulkImport: (rows: BulkImportAssetRow[]) =>
+        this.request<{ success: true; data: BulkImportResult }>('POST', '/assets/bulk-import', { rows }),
     };
   }
 

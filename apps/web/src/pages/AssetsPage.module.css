@@ -24,6 +24,32 @@
   margin: 0;
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.importBtn {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.importBtn:hover {
+  background-color: var(--color-surface-raised);
+}
+
 .createBtn {
   padding: 0.5rem 1.25rem;
   border: none;
@@ -38,6 +64,41 @@
 
 .createBtn:hover {
   background-color: var(--color-primary-dark);
+}
+
+.csvError {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-sm);
+  background-color: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.resultList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.errorList {
+  list-style: none;
+  padding: 0.75rem;
+  margin: 0 0 0.75rem;
+  border-radius: var(--radius-sm);
+  background-color: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  font-size: 0.75rem;
+  color: var(--color-danger);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .tableContainer {
