@@ -47,7 +47,7 @@ assetInspectionsRoutes.post('/', async (c) => {
     idempotency_key,
   } = parsed.data;
 
-  const submittedBy = c.get('userId');
+  const submittedBy = c.get('userProfileId');
 
   // Insert inspection (idempotency_key prevents duplicates from offline re-submissions)
   const { data: inspection, error: inspError } = await supabaseAdmin

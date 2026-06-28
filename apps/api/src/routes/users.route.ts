@@ -108,7 +108,7 @@ usersRoutes.post('/', requireRole('admin'), async (c) => {
 usersRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
   validateUuid(id);
-  const requesterId = c.get('userId');
+  const requesterId = c.get('userProfileId');
   const requesterRole = c.get('userRole');
 
   // Users can only fetch their own record unless they are admin/engineer
@@ -131,7 +131,7 @@ usersRoutes.get('/:id', async (c) => {
 usersRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   validateUuid(id);
-  const requesterId = c.get('userId');
+  const requesterId = c.get('userProfileId');
   const requesterRole = c.get('userRole');
 
   if (id !== requesterId && requesterRole !== 'admin') {

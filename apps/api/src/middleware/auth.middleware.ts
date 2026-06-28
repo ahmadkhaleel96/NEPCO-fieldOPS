@@ -1,10 +1,11 @@
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import type { UserRole } from '@fieldops/shared';
-import { supabaseAnon } from '../lib/supabase';
+import { supabaseAnon, supabaseAdmin } from '../lib/supabase';
 
 export type AuthVariables = {
-  userId: string;
+  userId: string;       // auth.users.id (Supabase auth UUID)
+  userProfileId: string; // public.users.id (FK used in all tables)
   userRole: UserRole;
   userEmail: string;
 };
@@ -46,7 +47,18 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(
       });
     }
 
+    const { data: profileRow } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('auth_id', user.id)
+      .single();
+
+    if (!profileRow) {
+      throw new HTTPException(403, { message: 'User profile not found — contact your administrator' });
+    }
+
     c.set('userId', user.id);
+    c.set('userProfileId', profileRow.id);
     c.set('userRole', role);
     c.set('userEmail', user.email ?? '');
 

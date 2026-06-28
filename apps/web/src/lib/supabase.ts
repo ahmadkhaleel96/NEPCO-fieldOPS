@@ -9,20 +9,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-/**
- * Web Supabase client.
- * Tokens are stored in memory only — NOT in localStorage.
- * The refresh token is handled via an httpOnly cookie set by the API.
- */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: {
-      getItem: () => null,
-      setItem: () => {},
-      removeItem: () => {},
-    },
     autoRefreshToken: true,
-    persistSession: false,
+    persistSession: true,
     detectSessionInUrl: false,
   },
 });

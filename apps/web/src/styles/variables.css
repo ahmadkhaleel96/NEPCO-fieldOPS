@@ -36,6 +36,15 @@
   --color-neutral-800:  #1f2937;
   --color-neutral-900:  #111827;
 
+  /* Shorthand aliases used by page CSS files */
+  --color-primary:        var(--color-primary-600);
+  --color-primary-dark:   var(--color-primary-700);
+  --color-text-primary:   var(--color-neutral-900);
+  --color-text-secondary: var(--color-neutral-500);
+  --color-surface:        #ffffff;
+  --color-surface-raised: var(--color-neutral-100);
+  --color-border:         var(--color-neutral-200);
+
   /* Status colours for permit/trip states */
   --color-status-draft:      var(--color-neutral-400);
   --color-status-issued:     var(--color-primary-500);

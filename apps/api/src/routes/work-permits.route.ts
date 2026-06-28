@@ -77,7 +77,7 @@ workPermitsRoutes.post('/', requireRole('admin', 'engineer'), async (c) => {
     team,
   } = parsed.data;
 
-  const engineerId = c.get('userId');
+  const engineerId = c.get('userProfileId');
 
   // Create permit + members + asset links in a single transaction via RPC
   // (For Phase 1 full implementation, this will use a database function)
@@ -188,7 +188,7 @@ workPermitsRoutes.post('/:id/withdraw', requireRole('admin', 'engineer'), async 
     tag_id: 'system',
     event_type: 'permit_withdrawal',
     permit_id: id,
-    user_id: c.get('userId'),
+    user_id: c.get('userProfileId'),
     lat: 0,
     lng: 0,
     client_id: crypto.randomUUID(),

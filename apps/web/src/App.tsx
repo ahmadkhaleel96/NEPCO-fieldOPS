@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
+import { apiClient } from './lib/api-client';
 import { AppShell } from './components/layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
 import { UsersPage } from './pages/UsersPage';
@@ -17,9 +18,23 @@ import styles from './styles/App.module.css';
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
+
+  async function handleSignIn(e: FormEvent) {
+    e.preventDefault();
+    setAuthError('');
+    setSigningIn(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    setSigningIn(false);
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) apiClient.setAccessToken(session.access_token);
       setSession(session);
       setLoading(false);
     });
@@ -27,6 +42,8 @@ export function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) apiClient.setAccessToken(session.access_token);
+      else apiClient.setAccessToken('');
       setSession(session);
     });
 
@@ -47,9 +64,36 @@ export function App() {
         <div className={styles.authCard}>
           <h1 className={styles.authTitle}>NEPCO FieldOps</h1>
           <p className={styles.authSubtitle}>Field Operation Management System</p>
-          <p className={styles.authPrompt}>
-            Sign in to access the dashboard. Contact your administrator for credentials.
-          </p>
+          <form onSubmit={handleSignIn} className={styles.authForm}>
+            <div className={styles.authField}>
+              <label className={styles.authLabel} htmlFor="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                className={styles.authInput}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </div>
+            <div className={styles.authField}>
+              <label className={styles.authLabel} htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                className={styles.authInput}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+            {authError && <p className={styles.authError}>{authError}</p>}
+            <button type="submit" className={styles.authButton} disabled={signingIn}>
+              {signingIn ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
         </div>
       </div>
     );

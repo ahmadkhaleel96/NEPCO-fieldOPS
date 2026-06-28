@@ -30,7 +30,7 @@ nfcEventsRoutes.post('/', async (c) => {
   }
 
   const { tag_id, trip_id, lat, lng, client_id, client_timestamp } = parsed.data;
-  const userId = c.get('userId');
+  const userId = c.get('userProfileId');
 
   // Verify tag belongs to an asset listed in the permit for this trip
   const { data: trip } = await supabaseAdmin

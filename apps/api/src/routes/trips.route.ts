@@ -37,7 +37,7 @@ tripsRoutes.post('/', requireRole('driver', 'admin'), async (c) => {
   }
 
   const { tag_id, permit_id, lat, lng, client_id, client_timestamp } = parsed.data;
-  const driverId = c.get('userId');
+  const driverId = c.get('userProfileId');
 
   // Step 1: Verify the NFC tag is active
   const { data: nfcTag } = await supabaseAdmin

@@ -62,7 +62,7 @@ vehiclesRoutes.post('/', requireRole('admin', 'engineer'), async (c) => {
 
   const { data, error } = await supabaseAdmin
     .from('vehicles')
-    .insert({ ...parsed.data, created_by: c.get('userId') })
+    .insert({ ...parsed.data, created_by: c.get('userProfileId') })
     .select()
     .single();
 

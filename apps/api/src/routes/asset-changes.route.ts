@@ -99,7 +99,7 @@ assetChangesRoutes.patch('/:id/approve', requireRole('admin', 'engineer'), async
     .maybeSingle();
 
   const newStatus = parsed.data.action === 'approve' ? 'approved' : 'rejected';
-  const reviewerId = c.get('userId');
+  const reviewerId = c.get('userProfileId');
 
   const { data, error } = await supabaseAdmin
     .from('asset_changes')
