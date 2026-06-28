@@ -55,6 +55,7 @@ vi.mock('../lib/supabase', () => ({
 // Mock API client — no network calls in unit tests
 vi.mock('../lib/api-client', () => ({
   apiClient: {
+    setAccessToken: vi.fn(),
     workPermits: {
       list: vi.fn().mockResolvedValue({
         success: true,
