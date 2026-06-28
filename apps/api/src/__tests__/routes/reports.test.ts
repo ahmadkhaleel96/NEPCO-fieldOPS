@@ -54,7 +54,12 @@ function authHeader() {
 type MockChain = {
   select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   gte: ReturnType<typeof vi.fn>;
   lte: ReturnType<typeof vi.fn>;
   range: ReturnType<typeof vi.fn>;
@@ -66,12 +71,17 @@ type MockChain = {
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select:      vi.fn().mockImplementation(() => chain),
     insert:      vi.fn().mockImplementation(() => chain),
+    update:      vi.fn().mockImplementation(() => chain),
+    upsert:      vi.fn().mockImplementation(() => chain),
+    delete:      vi.fn().mockImplementation(() => chain),
     eq:          vi.fn().mockImplementation(() => chain),
+    neq:         vi.fn().mockImplementation(() => chain),
+    in:          vi.fn().mockImplementation(() => chain),
     gte:         vi.fn().mockImplementation(() => chain),
     lte:         vi.fn().mockImplementation(() => chain),
     range:       vi.fn().mockImplementation(() => chain),
@@ -79,12 +89,26 @@ function makeChain(resolveWith?: unknown): MockChain {
     single:      vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
     not:         vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 type MockFromReturn = ReturnType<typeof supabaseAdmin.from>;
@@ -139,13 +163,15 @@ describe('GET /reports', () => {
 
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const res = await makeApp().request('/reports', { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('returns 200 with paginated reports for engineer', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: [MOCK_REPORT], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_REPORT], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request('/reports', { headers: authHeader() });
@@ -157,7 +183,8 @@ describe('GET /reports', () => {
 
   it('filters by cadence when provided', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: [], count: 0, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [], count: 0, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     await makeApp().request('/reports?cadence=monthly', { headers: authHeader() });
@@ -172,7 +199,8 @@ describe('GET /reports', () => {
 describe('GET /reports/:id', () => {
   it('returns 200 with full report for admin', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: MOCK_REPORT, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: MOCK_REPORT, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/reports/${V_REPORT}`, { headers: authHeader() });
@@ -183,7 +211,8 @@ describe('GET /reports/:id', () => {
 
   it('returns 404 when report not found', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: null, error: { message: 'Not found' } });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: { message: 'Not found' } });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/reports/${V_REPORT}`, { headers: authHeader() });
@@ -198,6 +227,7 @@ describe('GET /reports/:id', () => {
 describe('POST /reports/generate', () => {
   it('returns 403 for engineer (admin only)', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await makeApp().request('/reports/generate', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -208,6 +238,7 @@ describe('POST /reports/generate', () => {
 
   it('returns 422 for invalid body', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await makeApp().request('/reports/generate', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -218,6 +249,7 @@ describe('POST /reports/generate', () => {
 
   it('returns 422 when period_start is after period_end', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await makeApp().request('/reports/generate', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -232,6 +264,7 @@ describe('POST /reports/generate', () => {
 
   it('returns 201 and stores the report', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
 
     const permits = [
       { status: 'completed', engineer_id: 'eng-1' },
@@ -247,13 +280,13 @@ describe('POST /reports/generate', () => {
     ];
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: permits, error: null })))         // permits
-      .mockReturnValueOnce(from(makeChain({ count: 3, error: null })))              // trips count
-      .mockReturnValueOnce(from(makeChain({ data: inspections, error: null })))     // inspections
-      .mockReturnValueOnce(from(makeChain({ data: changes, error: null })))         // changes
-      .mockReturnValueOnce(from(makeChain({ count: 1, error: null })))              // safety_reports count
-      .mockReturnValueOnce(from(makeChain({ count: 15, error: null })))             // nfc_events count
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_REPORT, error: null })));    // insert
+      .mockReturnValueOnce(from(makeChain({}, { data: permits, error: null })))         // permits
+      .mockReturnValueOnce(from(makeChain({}, { count: 3, error: null })))              // trips count
+      .mockReturnValueOnce(from(makeChain({}, { data: inspections, error: null })))     // inspections
+      .mockReturnValueOnce(from(makeChain({}, { data: changes, error: null })))         // changes
+      .mockReturnValueOnce(from(makeChain({}, { count: 1, error: null })))              // safety_reports count
+      .mockReturnValueOnce(from(makeChain({}, { count: 15, error: null })))             // nfc_events count
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_REPORT, error: null })));    // insert
 
     const res = await makeApp().request('/reports/generate', {
       method: 'POST',
@@ -267,6 +300,7 @@ describe('POST /reports/generate', () => {
 
   it('aggregates summary correctly', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
 
     const permits = [
       { status: 'completed', engineer_id: 'eng-1' },
@@ -274,15 +308,15 @@ describe('POST /reports/generate', () => {
       { status: 'suspended', engineer_id: 'eng-2' },
     ];
 
-    const insertChain = makeChain({ data: MOCK_REPORT, error: null });
+    const insertChain = makeChain({}, { data: MOCK_REPORT, error: null });
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: permits, error: null })))
-      .mockReturnValueOnce(from(makeChain({ count: 2, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))
-      .mockReturnValueOnce(from(makeChain({ count: 5, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: permits, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { count: 2, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { count: 5, error: null })))
       .mockReturnValueOnce(from(insertChain));
 
     const res = await makeApp().request('/reports/generate', {
@@ -301,16 +335,17 @@ describe('POST /reports/generate', () => {
 
   it('returns 409 when report already exists for this period', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))
       .mockReturnValueOnce(
-        from(makeChain({ data: null, error: { message: 'unique constraint', code: '23505' } }))
+        from(makeChain({}, { data: null, error: { message: 'unique constraint', code: '23505' } }))
       );
 
     const res = await makeApp().request('/reports/generate', {
@@ -331,6 +366,7 @@ describe('POST /reports/generate', () => {
 describe('POST /reports/:id/verify', () => {
   it('returns 403 for driver', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const res = await makeApp().request(`/reports/${V_REPORT}/verify`, {
       method: 'POST',
       headers: authHeader(),
@@ -340,7 +376,8 @@ describe('POST /reports/:id/verify', () => {
 
   it('returns 404 when report not found', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: null, error: { message: 'Not found' } });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: { message: 'Not found' } });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/reports/${V_REPORT}/verify`, {
@@ -352,11 +389,12 @@ describe('POST /reports/:id/verify', () => {
 
   it('returns 200 and reports match=false for tampered data', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const reportRow = { id: V_REPORT, data: { some: 'data' }, sha256: 'deadbeef'.repeat(8) };
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: reportRow, error: null })))  // fetch
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));      // integrity_alert insert
+      .mockReturnValueOnce(from(makeChain({}, { data: reportRow, error: null })))  // fetch
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));      // integrity_alert insert
 
     const res = await makeApp().request(`/reports/${V_REPORT}/verify`, {
       method: 'POST',
@@ -369,13 +407,14 @@ describe('POST /reports/:id/verify', () => {
 
   it('creates integrity alert when hash mismatch is detected', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const reportRow = { id: V_REPORT, data: { foo: 'bar' }, sha256: 'deadbeef'.repeat(8) };
 
-    const alertChain = makeChain({ data: null, error: null });
+    const alertChain = makeChain({}, { data: null, error: null });
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: reportRow, error: null }))) // fetch report
-      .mockReturnValueOnce(from(alertChain));                                  // insert alert
+      .mockReturnValueOnce(from(makeChain({}, { data: reportRow, error: null }))) // fetch report
+      .mockReturnValueOnce(from(alertChain));                                      // insert alert
 
     const res = await makeApp().request(`/reports/${V_REPORT}/verify`, {
       method: 'POST',
@@ -397,6 +436,7 @@ describe('POST /reports/:id/verify', () => {
 describe('POST /reports/:id/regenerate-pdf', () => {
   it('returns 403 for engineer (admin only)', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await makeApp().request(`/reports/${V_REPORT}/regenerate-pdf`, {
       method: 'POST',
       headers: authHeader(),
@@ -406,7 +446,8 @@ describe('POST /reports/:id/regenerate-pdf', () => {
 
   it('returns 404 when report not found', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: null, error: { message: 'Not found' } });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: { message: 'Not found' } });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/reports/${V_REPORT}/regenerate-pdf`, {
@@ -418,7 +459,8 @@ describe('POST /reports/:id/regenerate-pdf', () => {
 
   it('returns 200 and queues PDF job', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: { id: V_REPORT, cadence: 'monthly', period_start: '2026-04-01T00:00:00.000Z', period_end: '2026-04-30T23:59:59.000Z' }, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: { id: V_REPORT, cadence: 'monthly', period_start: '2026-04-01T00:00:00.000Z', period_end: '2026-04-30T23:59:59.000Z' }, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/reports/${V_REPORT}/regenerate-pdf`, {

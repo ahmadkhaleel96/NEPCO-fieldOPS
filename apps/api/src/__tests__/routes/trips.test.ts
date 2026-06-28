@@ -46,7 +46,9 @@ type MockChain = {
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
   in: ReturnType<typeof vi.fn>;
   is: ReturnType<typeof vi.fn>;
   not: ReturnType<typeof vi.fn>;
@@ -58,14 +60,16 @@ type MockChain = {
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select:     vi.fn().mockImplementation(() => chain),
     insert:     vi.fn().mockImplementation(() => chain),
     update:     vi.fn().mockImplementation(() => chain),
     upsert:     vi.fn().mockImplementation(() => chain),
+    delete:     vi.fn().mockImplementation(() => chain),
     eq:         vi.fn().mockImplementation(() => chain),
+    neq:        vi.fn().mockImplementation(() => chain),
     in:         vi.fn().mockImplementation(() => chain),
     is:         vi.fn().mockImplementation(() => chain),
     not:        vi.fn().mockImplementation(() => chain),
@@ -73,12 +77,26 @@ function makeChain(resolveWith?: unknown): MockChain {
     order:      vi.fn().mockImplementation(() => chain),
     single:     vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 type MockFromReturn = ReturnType<typeof supabaseAdmin.from>;
@@ -120,7 +138,7 @@ const VALID_START_BODY = {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -130,6 +148,7 @@ beforeEach(() => {
 describe('POST /trips', () => {
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/trips', {
       method: 'POST',
@@ -141,6 +160,7 @@ describe('POST /trips', () => {
 
   it('returns 422 for invalid body', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/trips', {
       method: 'POST',
@@ -152,9 +172,10 @@ describe('POST /trips', () => {
 
   it('returns 403 when NFC tag is not active', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     // nfc_tags → no row
     vi.mocked(supabaseAdmin.from).mockReturnValue(
-      from(makeChain({ data: null, error: null }))
+      from(makeChain({}, { data: null, error: null }))
     );
     const app = makeApp();
     const res = await app.request('/trips', {
@@ -169,11 +190,12 @@ describe('POST /trips', () => {
 
   it('returns 403 when permit is not issued', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     // nfc_tags → found
     // work_permits → not found
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_TAG_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_TAG_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));
 
     const app = makeApp();
     const res = await app.request('/trips', {
@@ -188,10 +210,11 @@ describe('POST /trips', () => {
 
   it('returns 403 when vehicle does not match permit', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const wrongTagRow = { ...MOCK_TAG_ROW, vehicle_id: '00000000-0000-0000-0000-000000000099' };
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: wrongTagRow, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_PERMIT_ROW, error: null })));
+      .mockReturnValueOnce(from(makeChain({}, { data: wrongTagRow, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_PERMIT_ROW, error: null })));
 
     const app = makeApp();
     const res = await app.request('/trips', {
@@ -206,10 +229,11 @@ describe('POST /trips', () => {
 
   it('returns 403 when driver is not a permit member', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_TAG_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_PERMIT_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null }))); // member not found
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_TAG_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_PERMIT_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null }))); // member not found
 
     const app = makeApp();
     const res = await app.request('/trips', {
@@ -224,11 +248,12 @@ describe('POST /trips', () => {
 
   it('returns 409 when trip already exists for this permit', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_TAG_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_PERMIT_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_MEMBER_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: { id: 'trip-existing' }, error: null }))); // trip exists
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_TAG_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_PERMIT_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_MEMBER_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: { id: 'trip-existing' }, error: null }))); // trip exists
 
     const app = makeApp();
     const res = await app.request('/trips', {
@@ -243,13 +268,14 @@ describe('POST /trips', () => {
 
   it('creates trip and returns 201 on valid scan', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_TAG_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_PERMIT_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_MEMBER_ROW, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })))           // no existing trip
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_TRIP, error: null })))      // insert trip
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));          // insert nfc_event
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_TAG_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_PERMIT_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_MEMBER_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))           // no existing trip
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_TRIP, error: null })))      // insert trip
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));          // insert nfc_event
 
     const app = makeApp();
     const res = await app.request('/trips', {
@@ -283,6 +309,7 @@ describe('POST /trips/:id/locations', () => {
 
   it('returns 422 for empty locations array', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/locations`, {
       method: 'POST',
@@ -294,7 +321,8 @@ describe('POST /trips/:id/locations', () => {
 
   it('inserts locations and returns 200', async () => {
     mockAuthUser('driver');
-    const chain = makeChain({ error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -317,6 +345,7 @@ describe('POST /trips/:id/locations', () => {
 describe('GET /trips/:id/track', () => {
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/track`, { headers: authHeader() });
     expect(res.status).toBe(403);
@@ -324,11 +353,12 @@ describe('GET /trips/:id/track', () => {
 
   it('returns GeoJSON LineString for engineer', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const locationRows = [
       { lat: 31.95, lng: 35.91, captured_at: '2026-04-20T08:01:00.000Z' },
       { lat: 31.96, lng: 35.92, captured_at: '2026-04-20T08:02:00.000Z' },
     ];
-    const chain = makeChain({ data: locationRows, error: null });
+    const chain = makeChain({}, { data: locationRows, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -351,6 +381,7 @@ describe('GET /trips/:id/track', () => {
 describe('POST /trips/:id/end', () => {
   it('returns 403 for engineer', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/end`, {
       method: 'POST',
@@ -362,7 +393,8 @@ describe('POST /trips/:id/end', () => {
 
   it('returns 409 when open inspections exist', async () => {
     mockAuthUser('driver');
-    const chain = makeChain({ count: 2, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { count: 2, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -378,12 +410,15 @@ describe('POST /trips/:id/end', () => {
 
   it('closes trip and advances permit to completed', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const closedTrip = { ...MOCK_TRIP, end_time: '2026-04-20T16:00:00.000Z', permit_id: V2 };
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))          // inspections check
-      .mockReturnValueOnce(from(makeChain({ data: closedTrip, error: null })))  // update trip
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));       // update permit
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))               // inspections check
+      .mockReturnValueOnce(from(makeChain({}, { data: closedTrip, error: null })))       // update trip
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))             // nfc_tags lookup (no tag)
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))               // incomplete inspections
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));            // update permit
 
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/end`, {
@@ -399,9 +434,10 @@ describe('POST /trips/:id/end', () => {
 
   it('returns 409 when trip not found or already ended', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: { message: 'No rows' } })));
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: { message: 'No rows' } })));
 
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/end`, {
@@ -414,16 +450,17 @@ describe('POST /trips/:id/end', () => {
 
   it('logs trip_end NFC event when active vehicle tag is found', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const closedTrip = { ...MOCK_TRIP, end_time: '2026-04-20T16:00:00.000Z', permit_id: V2 };
     const nfcTagRow = { tag_id: 'ABCD1234' };
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))          // open inspections
-      .mockReturnValueOnce(from(makeChain({ data: closedTrip, error: null })))  // update trip
-      .mockReturnValueOnce(from(makeChain({ data: nfcTagRow, error: null })))   // nfc_tags lookup
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })))        // nfc_events insert
-      .mockReturnValueOnce(from(makeChain({ data: [], error: null })))          // incomplete inspections
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));       // update permit
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))          // open inspections
+      .mockReturnValueOnce(from(makeChain({}, { data: closedTrip, error: null })))  // update trip
+      .mockReturnValueOnce(from(makeChain({}, { data: nfcTagRow, error: null })))   // nfc_tags lookup
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))        // nfc_events insert
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))          // incomplete inspections
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));       // update permit
 
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/end`, {
@@ -436,21 +473,22 @@ describe('POST /trips/:id/end', () => {
 
   it('creates follow-up tasks for incomplete and deferred inspections', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const closedTrip = { ...MOCK_TRIP, end_time: '2026-04-20T16:00:00.000Z', permit_id: V2 };
     const incompleteInspections = [
       { id: 'insp-1', asset_id: 'asset-1', form_data: { condition: 'fair' } },
       { id: 'insp-2', asset_id: 'asset-2', form_data: {} },
     ];
 
-    const followUpChain = makeChain({ data: null, error: null });
+    const followUpChain = makeChain({}, { data: null, error: null });
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ count: 0, error: null })))                    // open inspections
-      .mockReturnValueOnce(from(makeChain({ data: closedTrip, error: null })))            // update trip
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })))                  // nfc_tags (no tag)
-      .mockReturnValueOnce(from(makeChain({ data: incompleteInspections, error: null }))) // incomplete inspections
-      .mockReturnValueOnce(from(followUpChain))                                           // follow_up_tasks insert
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null })));                 // update permit
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))                    // open inspections
+      .mockReturnValueOnce(from(makeChain({}, { data: closedTrip, error: null })))            // update trip
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))                  // nfc_tags (no tag)
+      .mockReturnValueOnce(from(makeChain({}, { data: incompleteInspections, error: null }))) // incomplete inspections
+      .mockReturnValueOnce(from(followUpChain))                                               // follow_up_tasks insert
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));                 // update permit
 
     const app = makeApp();
     const res = await app.request(`/trips/${V_TRIP}/end`, {

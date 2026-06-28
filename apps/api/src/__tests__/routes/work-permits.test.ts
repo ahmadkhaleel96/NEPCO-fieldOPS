@@ -45,7 +45,10 @@ type MockChain = {
   select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
   in: ReturnType<typeof vi.fn>;
   range: ReturnType<typeof vi.fn>;
   order: ReturnType<typeof vi.fn>;
@@ -55,24 +58,41 @@ type MockChain = {
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select: vi.fn().mockImplementation(() => chain),
     insert: vi.fn().mockImplementation(() => chain),
     update: vi.fn().mockImplementation(() => chain),
+    upsert: vi.fn().mockImplementation(() => chain),
+    delete: vi.fn().mockImplementation(() => chain),
     eq: vi.fn().mockImplementation(() => chain),
+    neq: vi.fn().mockImplementation(() => chain),
     in: vi.fn().mockImplementation(() => chain),
     range: vi.fn().mockImplementation(() => chain),
     order: vi.fn().mockImplementation(() => chain),
     single: vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 const V1 = '00000000-0000-0000-0000-000000000001';
@@ -110,7 +130,7 @@ const VALID_CREATE_BODY = {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe('GET /work-permits', () => {
@@ -122,7 +142,8 @@ describe('GET /work-permits', () => {
 
   it('returns paginated list for engineer', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: [MOCK_PERMIT], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_PERMIT], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
@@ -136,7 +157,8 @@ describe('GET /work-permits', () => {
 
   it('filters by status when provided', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: [], count: 0, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [], count: 0, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
@@ -149,6 +171,7 @@ describe('GET /work-permits', () => {
 describe('POST /work-permits', () => {
   it('returns 403 for technician', async () => {
     mockAuthUser('technician');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/work-permits', {
       method: 'POST',
@@ -160,6 +183,7 @@ describe('POST /work-permits', () => {
 
   it('returns 422 for invalid body', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/work-permits', {
       method: 'POST',
@@ -171,13 +195,14 @@ describe('POST /work-permits', () => {
 
   it('creates permit and returns 201', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
 
     // Call 1: insert permit
-    const permitChain = makeChain({ data: MOCK_PERMIT, error: null });
+    const permitChain = makeChain({}, { data: MOCK_PERMIT, error: null });
     // Call 2: insert permit_assets (fire-and-forget, just needs a thenable)
-    const assetsChain = makeChain({ data: null, error: null });
+    const assetsChain = makeChain({}, { data: null, error: null });
     // Call 3: insert permit_members
-    const membersChain = makeChain({ data: null, error: null });
+    const membersChain = makeChain({}, { data: null, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
@@ -198,10 +223,11 @@ describe('POST /work-permits', () => {
 
   it('inserts correct asset and member rows', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
 
-    const permitChain = makeChain({ data: MOCK_PERMIT, error: null });
-    const assetsChain = makeChain({ data: null, error: null });
-    const membersChain = makeChain({ data: null, error: null });
+    const permitChain = makeChain({}, { data: MOCK_PERMIT, error: null });
+    const assetsChain = makeChain({}, { data: null, error: null });
+    const membersChain = makeChain({}, { data: null, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
@@ -232,7 +258,8 @@ describe('POST /work-permits', () => {
 describe('GET /work-permits/:id', () => {
   it('returns permit with members and assets', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({
+    mockUserProfile();
+    const chain = makeChain({}, {
       data: { ...MOCK_PERMIT, permit_members: [], permit_assets: [] },
       error: null,
     });
@@ -247,7 +274,8 @@ describe('GET /work-permits/:id', () => {
 
   it('returns 404 when permit not found', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: null, error: { message: 'Not found' } });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: { message: 'Not found' } });
     vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
@@ -259,6 +287,7 @@ describe('GET /work-permits/:id', () => {
 describe('POST /work-permits/:id/withdraw', () => {
   it('returns 403 for driver', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
@@ -270,6 +299,7 @@ describe('POST /work-permits/:id/withdraw', () => {
 
   it('returns 422 when reason is too short', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
       method: 'POST',
@@ -281,8 +311,9 @@ describe('POST /work-permits/:id/withdraw', () => {
 
   it('returns 409 when trip already started', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     // Trip exists
-    const tripsChain = makeChain({ data: { id: 'trip-1' }, error: null });
+    const tripsChain = makeChain({}, { data: { id: 'trip-1' }, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(tripsChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
@@ -298,13 +329,14 @@ describe('POST /work-permits/:id/withdraw', () => {
 
   it('withdraws permit and returns updated record', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
 
-    const tripsChain = makeChain({ data: null, error: null });
-    const permitChain = makeChain({
+    const tripsChain = makeChain({}, { data: null, error: null });
+    const permitChain = makeChain({}, {
       data: { ...MOCK_PERMIT, status: 'withdrawn' },
       error: null,
     });
-    const eventsChain = makeChain({ data: null, error: null });
+    const eventsChain = makeChain({}, { data: null, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(tripsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
@@ -325,10 +357,11 @@ describe('POST /work-permits/:id/withdraw', () => {
 
   it('returns 409 when permit status cannot be withdrawn', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
 
-    const tripsChain = makeChain({ data: null, error: null });
+    const tripsChain = makeChain({}, { data: null, error: null });
     // Permit update returns no data (already completed/active)
-    const permitChain = makeChain({ data: null, error: { message: 'No rows' } });
+    const permitChain = makeChain({}, { data: null, error: { message: 'No rows' } });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(tripsChain as unknown as ReturnType<typeof supabaseAdmin.from>)

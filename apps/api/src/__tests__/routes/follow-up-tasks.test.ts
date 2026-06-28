@@ -41,7 +41,9 @@ type MockChain = {
   select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
   in: ReturnType<typeof vi.fn>;
   is: ReturnType<typeof vi.fn>;
   not: ReturnType<typeof vi.fn>;
@@ -53,13 +55,15 @@ type MockChain = {
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select:      vi.fn().mockImplementation(() => chain),
     insert:      vi.fn().mockImplementation(() => chain),
     update:      vi.fn().mockImplementation(() => chain),
+    delete:      vi.fn().mockImplementation(() => chain),
     eq:          vi.fn().mockImplementation(() => chain),
+    neq:         vi.fn().mockImplementation(() => chain),
     in:          vi.fn().mockImplementation(() => chain),
     is:          vi.fn().mockImplementation(() => chain),
     not:         vi.fn().mockImplementation(() => chain),
@@ -67,12 +71,26 @@ function makeChain(resolveWith?: unknown): MockChain {
     order:       vi.fn().mockImplementation(() => chain),
     single:      vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 type MockFromReturn = ReturnType<typeof supabaseAdmin.from>;
@@ -115,6 +133,7 @@ describe('GET /follow-up-tasks', () => {
 
   it('returns 403 for technician role', async () => {
     mockAuthUser('technician');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/follow-up-tasks', { headers: authHeader() });
     expect(res.status).toBe(403);
@@ -122,7 +141,8 @@ describe('GET /follow-up-tasks', () => {
 
   it('returns 200 with paginated tasks for engineer', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: [MOCK_TASK], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_TASK], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -136,7 +156,8 @@ describe('GET /follow-up-tasks', () => {
 
   it('returns 200 with paginated tasks for team_leader', async () => {
     mockAuthUser('team_leader');
-    const chain = makeChain({ data: [], count: 0, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [], count: 0, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -146,7 +167,8 @@ describe('GET /follow-up-tasks', () => {
 
   it('filters by resolved=false (unresolved tasks)', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: [MOCK_TASK], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_TASK], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -157,7 +179,8 @@ describe('GET /follow-up-tasks', () => {
 
   it('filters by resolved=true (resolved tasks)', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: [], count: 0, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [], count: 0, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -174,7 +197,8 @@ describe('GET /follow-up-tasks', () => {
 describe('GET /follow-up-tasks/:id', () => {
   it('returns 200 with task data', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: MOCK_TASK, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: MOCK_TASK, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -186,7 +210,8 @@ describe('GET /follow-up-tasks/:id', () => {
 
   it('returns 404 when task not found', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: null, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -202,6 +227,7 @@ describe('GET /follow-up-tasks/:id', () => {
 describe('PATCH /follow-up-tasks/:id/resolve', () => {
   it('returns 403 for technician', async () => {
     mockAuthUser('technician');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/follow-up-tasks/${TASK_ID}/resolve`, {
       method: 'PATCH',
@@ -213,6 +239,7 @@ describe('PATCH /follow-up-tasks/:id/resolve', () => {
 
   it('returns 422 for invalid payload', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/follow-up-tasks/${TASK_ID}/resolve`, {
       method: 'PATCH',
@@ -224,8 +251,9 @@ describe('PATCH /follow-up-tasks/:id/resolve', () => {
 
   it('returns 404 when task not found', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(
-      from(makeChain({ data: null, error: null }))
+      from(makeChain({}, { data: null, error: null }))
     );
 
     const app = makeApp();
@@ -239,9 +267,10 @@ describe('PATCH /follow-up-tasks/:id/resolve', () => {
 
   it('returns 409 when task is already resolved', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const resolvedTask = { ...MOCK_TASK, resolved_at: '2026-04-22T12:00:00.000Z' };
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(
-      from(makeChain({ data: resolvedTask, error: null }))
+      from(makeChain({}, { data: resolvedTask, error: null }))
     );
 
     const app = makeApp();
@@ -255,11 +284,12 @@ describe('PATCH /follow-up-tasks/:id/resolve', () => {
 
   it('returns 200 and resolves the task', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const resolvedTask = { ...MOCK_TASK, resolved_at: '2026-04-22T12:00:00.000Z', notes: 'Done' };
 
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_TASK, error: null })))         // fetch existing
-      .mockReturnValueOnce(from(makeChain({ data: resolvedTask, error: null })));     // update
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_TASK, error: null })))         // fetch existing
+      .mockReturnValueOnce(from(makeChain({}, { data: resolvedTask, error: null })));     // update
 
     const app = makeApp();
     const res = await app.request(`/follow-up-tasks/${TASK_ID}/resolve`, {

@@ -44,27 +44,51 @@ function authHeader() {
 type MockChain = {
   select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   single: ReturnType<typeof vi.fn>;
   maybeSingle: ReturnType<typeof vi.fn>;
   then?: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => Promise<unknown>;
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select:     vi.fn().mockImplementation(() => chain),
     insert:     vi.fn().mockImplementation(() => chain),
+    update:     vi.fn().mockImplementation(() => chain),
+    upsert:     vi.fn().mockImplementation(() => chain),
+    delete:     vi.fn().mockImplementation(() => chain),
     eq:         vi.fn().mockImplementation(() => chain),
+    neq:        vi.fn().mockImplementation(() => chain),
+    in:         vi.fn().mockImplementation(() => chain),
     single:     vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 type MockFromReturn = ReturnType<typeof supabaseAdmin.from>;
@@ -98,7 +122,7 @@ const MOCK_EVENT = {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe('POST /nfc-events', () => {
@@ -110,6 +134,7 @@ describe('POST /nfc-events', () => {
 
   it('returns 422 for invalid body', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/nfc-events', {
       method: 'POST',
@@ -121,8 +146,9 @@ describe('POST /nfc-events', () => {
 
   it('returns 404 when trip not found', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from).mockReturnValue(
-      from(makeChain({ data: null, error: null }))
+      from(makeChain({}, { data: null, error: null }))
     );
     const app = makeApp();
     const res = await app.request('/nfc-events', {
@@ -135,9 +161,10 @@ describe('POST /nfc-events', () => {
 
   it('returns 403 when NFC tag is not active', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: { permit_id: V_PERMIT }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null }))); // no active tag
+      .mockReturnValueOnce(from(makeChain({}, { data: { permit_id: V_PERMIT }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null }))); // no active tag
 
     const app = makeApp();
     const res = await app.request('/nfc-events', {
@@ -152,10 +179,11 @@ describe('POST /nfc-events', () => {
 
   it('returns 403 when asset is not in the permit', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: { permit_id: V_PERMIT }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: { asset_id: V_ASSET }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: null }))); // asset not in permit
+      .mockReturnValueOnce(from(makeChain({}, { data: { permit_id: V_PERMIT }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: { asset_id: V_ASSET }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null }))); // asset not in permit
 
     const app = makeApp();
     const res = await app.request('/nfc-events', {
@@ -170,11 +198,12 @@ describe('POST /nfc-events', () => {
 
   it('records site arrival and returns event data', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: { permit_id: V_PERMIT }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: { asset_id: V_ASSET }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: { asset_id: V_ASSET }, error: null })))   // asset in permit
-      .mockReturnValueOnce(from(makeChain({ data: MOCK_EVENT, error: null })));              // insert event
+      .mockReturnValueOnce(from(makeChain({}, { data: { permit_id: V_PERMIT }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: { asset_id: V_ASSET }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: { asset_id: V_ASSET }, error: null })))   // asset in permit
+      .mockReturnValueOnce(from(makeChain({}, { data: MOCK_EVENT, error: null })));              // insert event
 
     const app = makeApp();
     const res = await app.request('/nfc-events', {
@@ -194,11 +223,12 @@ describe('POST /nfc-events', () => {
 
   it('returns success on duplicate client_id (idempotent)', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.from)
-      .mockReturnValueOnce(from(makeChain({ data: { permit_id: V_PERMIT }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: { asset_id: V_ASSET }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: { asset_id: V_ASSET }, error: null })))
-      .mockReturnValueOnce(from(makeChain({ data: null, error: { message: 'duplicate key unique constraint' } })));
+      .mockReturnValueOnce(from(makeChain({}, { data: { permit_id: V_PERMIT }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: { asset_id: V_ASSET }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: { asset_id: V_ASSET }, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: { message: 'duplicate key unique constraint' } })));
 
     const app = makeApp();
     const res = await app.request('/nfc-events', {

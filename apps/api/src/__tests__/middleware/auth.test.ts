@@ -3,7 +3,6 @@ import { Hono } from 'hono';
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware';
 import { errorHandler } from '../../middleware/error.middleware';
 
-// Mock Supabase so we don't need live credentials in tests
 vi.mock('../../lib/supabase', () => ({
   supabaseAnon: {
     auth: {
@@ -17,23 +16,39 @@ vi.mock('../../lib/supabase', () => ({
         deleteUser: vi.fn(),
       },
     },
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      range: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      single: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockReturnThis(),
-    })),
+    from: vi.fn(),
   },
 }));
 
-const { supabaseAnon } = await import('../../lib/supabase');
+const { supabaseAnon, supabaseAdmin } = await import('../../lib/supabase');
+
+type MockChain = {
+  select: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+  [key: string]: unknown;
+};
+
+function makeChain(overrides: Partial<MockChain> = {}): MockChain {
+  const chain = {} as MockChain;
+  Object.assign(chain, {
+    select: vi.fn().mockImplementation(() => chain),
+    eq: vi.fn().mockImplementation(() => chain),
+    single: vi.fn().mockImplementation(() => chain),
+    ...overrides,
+  });
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+}
 
 function makeTestApp() {
-  const app = new Hono<{ Variables: { userId: string; userRole: string; userEmail: string } }>();
+  const app = new Hono<{ Variables: { userId: string; userProfileId: string; userRole: string; userEmail: string } }>();
 
   app.use('/protected/*', authMiddleware);
   app.get('/protected/hello', (c) => {
@@ -56,7 +71,7 @@ describe('authMiddleware', () => {
 
   beforeEach(() => {
     app = makeTestApp();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('returns 401 when Authorization header is missing', async () => {
@@ -120,6 +135,7 @@ describe('authMiddleware', () => {
       },
       error: null,
     } as Awaited<ReturnType<typeof supabaseAnon.auth.getUser>>);
+    mockUserProfile();
 
     const res = await app.request('/protected/hello', {
       headers: { Authorization: 'Bearer valid-token' },
@@ -136,7 +152,7 @@ describe('requireRole', () => {
 
   beforeEach(() => {
     app = makeTestApp();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   function mockUser(role: string) {
@@ -157,6 +173,7 @@ describe('requireRole', () => {
 
   it('allows admin to access admin-only route', async () => {
     mockUser('admin');
+    mockUserProfile();
     const res = await app.request('/admin/data', {
       headers: { Authorization: 'Bearer token' },
     });
@@ -165,6 +182,7 @@ describe('requireRole', () => {
 
   it('blocks non-admin from admin-only route', async () => {
     mockUser('engineer');
+    mockUserProfile();
     const res = await app.request('/admin/data', {
       headers: { Authorization: 'Bearer token' },
     });
@@ -175,6 +193,7 @@ describe('requireRole', () => {
 
   it('allows engineer to access engineer-or-admin route', async () => {
     mockUser('engineer');
+    mockUserProfile();
     const res = await app.request('/engineer-or-admin/data', {
       headers: { Authorization: 'Bearer token' },
     });
@@ -183,6 +202,7 @@ describe('requireRole', () => {
 
   it('blocks driver from engineer-or-admin route', async () => {
     mockUser('driver');
+    mockUserProfile();
     const res = await app.request('/engineer-or-admin/data', {
       headers: { Authorization: 'Bearer token' },
     });

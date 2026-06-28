@@ -53,25 +53,62 @@ function authHeader() {
   return { Authorization: 'Bearer token' };
 }
 
-function mockFromChain(overrides: Record<string, unknown> = {}) {
-  const chain = {
-    select: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    range: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    single: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockReturnThis(),
+type MockChain = {
+  select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  range: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+  maybeSingle: ReturnType<typeof vi.fn>;
+  then?: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => Promise<unknown>;
+  [key: string]: unknown;
+};
+
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = {} as MockChain;
+  Object.assign(chain, {
+    select: vi.fn().mockImplementation(() => chain),
+    insert: vi.fn().mockImplementation(() => chain),
+    update: vi.fn().mockImplementation(() => chain),
+    upsert: vi.fn().mockImplementation(() => chain),
+    delete: vi.fn().mockImplementation(() => chain),
+    eq: vi.fn().mockImplementation(() => chain),
+    neq: vi.fn().mockImplementation(() => chain),
+    in: vi.fn().mockImplementation(() => chain),
+    range: vi.fn().mockImplementation(() => chain),
+    order: vi.fn().mockImplementation(() => chain),
+    single: vi.fn().mockImplementation(() => chain),
+    maybeSingle: vi.fn().mockImplementation(() => chain),
     ...overrides,
-  };
+  });
+  if (resolveWith !== undefined) {
+    chain.then = (resolve, reject) => Promise.resolve(resolveWith).then(resolve, reject);
+  }
+  return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
   vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
   return chain;
 }
 
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+}
+
 describe('GET /users', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 401 with no token', async () => {
     const res = await app.request('/users');
@@ -80,17 +117,20 @@ describe('GET /users', () => {
 
   it('returns 403 for non-admin/engineer roles', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const res = await app.request('/users', { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('returns paginated user list for admin', async () => {
     mockAuthUser('admin');
-    const chain = mockFromChain();
-    chain.order = vi.fn().mockResolvedValue({
-      data: [{ id: 'u1', email: 'a@b.com' }],
-      count: 1,
-      error: null,
+    mockUserProfile();
+    const chain = mockFromChain({
+      order: vi.fn().mockResolvedValue({
+        data: [{ id: 'u1', email: 'a@b.com' }],
+        count: 1,
+        error: null,
+      }),
     });
 
     const res = await app.request('/users', { headers: authHeader() });
@@ -103,8 +143,10 @@ describe('GET /users', () => {
 
   it('returns paginated user list for engineer', async () => {
     mockAuthUser('engineer');
-    const chain = mockFromChain();
-    chain.order = vi.fn().mockResolvedValue({ data: [], count: 0, error: null });
+    mockUserProfile();
+    mockFromChain({
+      order: vi.fn().mockResolvedValue({ data: [], count: 0, error: null }),
+    });
 
     const res = await app.request('/users', { headers: authHeader() });
     expect(res.status).toBe(200);
@@ -112,8 +154,10 @@ describe('GET /users', () => {
 
   it('respects page and per_page query params', async () => {
     mockAuthUser('admin');
-    const chain = mockFromChain();
-    chain.order = vi.fn().mockResolvedValue({ data: [], count: 50, error: null });
+    mockUserProfile();
+    mockFromChain({
+      order: vi.fn().mockResolvedValue({ data: [], count: 50, error: null }),
+    });
 
     const res = await app.request('/users?page=2&per_page=10', { headers: authHeader() });
     expect(res.status).toBe(200);
@@ -126,10 +170,11 @@ describe('GET /users', () => {
 
 describe('POST /users', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for non-admin', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await app.request('/users', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -140,6 +185,7 @@ describe('POST /users', () => {
 
   it('returns 422 for invalid payload', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await app.request('/users', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -152,6 +198,7 @@ describe('POST /users', () => {
 
   it('returns 409 when email already exists', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.auth.admin.createUser).mockResolvedValueOnce({
       data: { user: null },
       error: { message: 'User already registered', name: 'AuthError', status: 422 },
@@ -167,16 +214,18 @@ describe('POST /users', () => {
 
   it('creates a user and returns 201', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const createdAuthUser = { id: 'auth-123', email: 'new@nepco.jo' };
     vi.mocked(supabaseAdmin.auth.admin.createUser).mockResolvedValueOnce({
       data: { user: createdAuthUser },
       error: null,
     } as Awaited<ReturnType<typeof supabaseAdmin.auth.admin.createUser>>);
 
-    const chain = mockFromChain();
-    chain.single = vi.fn().mockResolvedValue({
-      data: { id: 'u-123', email: 'new@nepco.jo', full_name: 'New User', role: 'driver' },
-      error: null,
+    const chain = mockFromChain({
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'u-123', email: 'new@nepco.jo', full_name: 'New User', role: 'driver' },
+        error: null,
+      }),
     });
 
     const res = await app.request('/users', {
@@ -193,14 +242,16 @@ describe('POST /users', () => {
 
 describe('GET /users/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('allows user to fetch their own record', async () => {
     mockAuthUser('driver', V_SELF);
-    const chain = mockFromChain();
-    chain.single = vi.fn().mockResolvedValue({
-      data: { id: V_SELF, email: 's@s.com' },
-      error: null,
+    mockUserProfile(V_SELF);
+    const chain = mockFromChain({
+      single: vi.fn().mockResolvedValue({
+        data: { id: V_SELF, email: 's@s.com' },
+        error: null,
+      }),
     });
 
     const res = await app.request(`/users/${V_SELF}`, { headers: authHeader() });
@@ -209,16 +260,19 @@ describe('GET /users/:id', () => {
 
   it('blocks driver from fetching another user', async () => {
     mockAuthUser('driver', V_SELF);
+    mockUserProfile(V_SELF);
     const res = await app.request(`/users/${V_OTHER}`, { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('allows admin to fetch any user', async () => {
     mockAuthUser('admin', 'admin-id');
-    const chain = mockFromChain();
-    chain.single = vi.fn().mockResolvedValue({
-      data: { id: V_OTHER, email: 'o@o.com' },
-      error: null,
+    mockUserProfile();
+    const chain = mockFromChain({
+      single: vi.fn().mockResolvedValue({
+        data: { id: V_OTHER, email: 'o@o.com' },
+        error: null,
+      }),
     });
 
     const res = await app.request(`/users/${V_OTHER}`, { headers: authHeader() });
@@ -227,8 +281,10 @@ describe('GET /users/:id', () => {
 
   it('returns 404 when user not found', async () => {
     mockAuthUser('admin');
-    const chain = mockFromChain();
-    chain.single = vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } });
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+    });
 
     const res = await app.request(`/users/${V_NOT_FOUND}`, { headers: authHeader() });
     expect(res.status).toBe(404);
@@ -237,14 +293,16 @@ describe('GET /users/:id', () => {
 
 describe('PATCH /users/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('allows user to update their own record', async () => {
     mockAuthUser('technician', V_SELF);
-    const chain = mockFromChain();
-    chain.single = vi.fn().mockResolvedValue({
-      data: { id: V_SELF, full_name: 'Updated' },
-      error: null,
+    mockUserProfile(V_SELF);
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({
+        data: { id: V_SELF, full_name: 'Updated' },
+        error: null,
+      }),
     });
 
     const res = await app.request(`/users/${V_SELF}`, {
@@ -257,6 +315,7 @@ describe('PATCH /users/:id', () => {
 
   it('blocks non-admin from updating another user', async () => {
     mockAuthUser('engineer', V_SELF);
+    mockUserProfile(V_SELF);
     const res = await app.request(`/users/${V_OTHER}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -267,6 +326,7 @@ describe('PATCH /users/:id', () => {
 
   it('returns 422 for invalid update data', async () => {
     mockAuthUser('admin', V_SELF);
+    mockUserProfile();
     const res = await app.request(`/users/${V_SELF}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -278,20 +338,23 @@ describe('PATCH /users/:id', () => {
 
 describe('DELETE /users/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for non-admin', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await app.request(`/users/${V_USER}`, { method: 'DELETE', headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('soft-deletes the user (sets is_active = false)', async () => {
     mockAuthUser('admin');
-    const chain = mockFromChain();
-    chain.single = vi.fn().mockResolvedValue({
-      data: { id: 'u-1', is_active: false },
-      error: null,
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'u-1', is_active: false },
+        error: null,
+      }),
     });
 
     const res = await app.request(`/users/${V_USER}`, { method: 'DELETE', headers: authHeader() });

@@ -60,6 +60,59 @@ function authHeader() {
   return { Authorization: 'Bearer valid-token' };
 }
 
+type MockChain = {
+  select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
+  range: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
+  maybeSingle: ReturnType<typeof vi.fn>;
+  then?: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => Promise<unknown>;
+  [key: string]: unknown;
+};
+
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = {} as MockChain;
+  Object.assign(chain, {
+    select: vi.fn().mockImplementation(() => chain),
+    insert: vi.fn().mockImplementation(() => chain),
+    update: vi.fn().mockImplementation(() => chain),
+    upsert: vi.fn().mockImplementation(() => chain),
+    delete: vi.fn().mockImplementation(() => chain),
+    eq: vi.fn().mockImplementation(() => chain),
+    neq: vi.fn().mockImplementation(() => chain),
+    in: vi.fn().mockImplementation(() => chain),
+    range: vi.fn().mockImplementation(() => chain),
+    order: vi.fn().mockImplementation(() => chain),
+    single: vi.fn().mockImplementation(() => chain),
+    maybeSingle: vi.fn().mockImplementation(() => chain),
+    ...overrides,
+  });
+  if (resolveWith !== undefined) {
+    chain.then = (resolve, reject) => Promise.resolve(resolveWith).then(resolve, reject);
+  }
+  return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(authRateLimiter.limit).mockResolvedValue({
@@ -83,6 +136,7 @@ describe('POST /auth/revoke', () => {
 
   it('returns 403 for non-admin role', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await makeApp().request('/auth/revoke', {
       method: 'POST',
       headers: { ...authHeader(), 'content-type': 'application/json' },
@@ -93,6 +147,7 @@ describe('POST /auth/revoke', () => {
 
   it('returns 422 when user_id is not a valid UUID', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await makeApp().request('/auth/revoke', {
       method: 'POST',
       headers: { ...authHeader(), 'content-type': 'application/json' },
@@ -105,6 +160,7 @@ describe('POST /auth/revoke', () => {
 
   it('returns 400 on invalid JSON body', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const res = await makeApp().request('/auth/revoke', {
       method: 'POST',
       headers: { ...authHeader(), 'content-type': 'application/json' },
@@ -115,6 +171,7 @@ describe('POST /auth/revoke', () => {
 
   it('returns 200 and revokes sessions when admin calls with valid UUID', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.auth.admin.signOut).mockResolvedValueOnce({
       data: {},
       error: null,
@@ -137,6 +194,7 @@ describe('POST /auth/revoke', () => {
 
   it('returns 500 when Supabase signOut fails', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     vi.mocked(supabaseAdmin.auth.admin.signOut).mockResolvedValueOnce({
       data: {},
       error: { message: 'Auth service error', name: 'AuthError', status: 500 },

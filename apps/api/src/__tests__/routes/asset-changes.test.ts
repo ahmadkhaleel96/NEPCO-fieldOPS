@@ -43,8 +43,13 @@ function authHeader() {
 
 type MockChain = {
   select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   order: ReturnType<typeof vi.fn>;
   range: ReturnType<typeof vi.fn>;
   limit: ReturnType<typeof vi.fn>;
@@ -54,23 +59,42 @@ type MockChain = {
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select: vi.fn().mockImplementation(() => chain),
+    insert: vi.fn().mockImplementation(() => chain),
     update: vi.fn().mockImplementation(() => chain),
+    upsert: vi.fn().mockImplementation(() => chain),
+    delete: vi.fn().mockImplementation(() => chain),
     eq: vi.fn().mockImplementation(() => chain),
+    neq: vi.fn().mockImplementation(() => chain),
+    in: vi.fn().mockImplementation(() => chain),
     order: vi.fn().mockImplementation(() => chain),
     range: vi.fn().mockImplementation(() => chain),
     limit: vi.fn().mockImplementation(() => chain),
     single: vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 type MockFromReturn = ReturnType<typeof supabaseAdmin.from>;
@@ -111,19 +135,22 @@ describe('GET /asset-changes', () => {
 
   it('returns 403 for technician', async () => {
     mockAuthUser('technician');
+    mockUserProfile();
     const res = await makeApp().request('/asset-changes', { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('returns 403 for team_leader', async () => {
     mockAuthUser('team_leader');
+    mockUserProfile();
     const res = await makeApp().request('/asset-changes', { headers: authHeader() });
     expect(res.status).toBe(403);
   });
 
   it('returns 200 with paginated list for engineer', async () => {
     mockAuthUser('engineer');
-    const listChain = makeChain({ data: [MOCK_CHANGE], error: null, count: 1 });
+    mockUserProfile();
+    const listChain = makeChain({}, { data: [MOCK_CHANGE], error: null, count: 1 });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(listChain));
 
     const res = await makeApp().request('/asset-changes', { headers: authHeader() });
@@ -140,7 +167,8 @@ describe('GET /asset-changes', () => {
 
   it('returns 200 with paginated list for admin', async () => {
     mockAuthUser('admin');
-    const listChain = makeChain({ data: [MOCK_CHANGE], error: null, count: 1 });
+    mockUserProfile();
+    const listChain = makeChain({}, { data: [MOCK_CHANGE], error: null, count: 1 });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(listChain));
 
     const res = await makeApp().request('/asset-changes?status=pending', { headers: authHeader() });
@@ -150,7 +178,8 @@ describe('GET /asset-changes', () => {
 
   it('filters by asset_id when provided', async () => {
     mockAuthUser('engineer');
-    const listChain = makeChain({ data: [], error: null, count: 0 });
+    mockUserProfile();
+    const listChain = makeChain({}, { data: [], error: null, count: 0 });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(listChain));
 
     await makeApp().request(`/asset-changes?asset_id=${V_ASSET}`, { headers: authHeader() });
@@ -174,6 +203,7 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 403 for technician', async () => {
     mockAuthUser('technician');
+    mockUserProfile();
     const res = await makeApp().request(`/asset-changes/${V_CHANGE}/approve`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -184,6 +214,7 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 422 on invalid body', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await makeApp().request(`/asset-changes/${V_CHANGE}/approve`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -196,7 +227,8 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 404 when change not found', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: null, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/asset-changes/${V_CHANGE}/approve`, {
@@ -209,7 +241,8 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 409 when change already reviewed', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: { ...MOCK_CHANGE, status: 'approved' }, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: { ...MOCK_CHANGE, status: 'approved' }, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
 
     const res = await makeApp().request(`/asset-changes/${V_CHANGE}/approve`, {
@@ -222,9 +255,10 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 200 when engineer approves a pending change', async () => {
     mockAuthUser('engineer');
-    const fetchChain = makeChain({ data: MOCK_CHANGE, error: null });
-    const historyChain = makeChain({ data: null, error: null });
-    const updateChain = makeChain({ data: REVIEWED_CHANGE, error: null });
+    mockUserProfile();
+    const fetchChain = makeChain({}, { data: MOCK_CHANGE, error: null });
+    const historyChain = makeChain({}, { data: null, error: null });
+    const updateChain = makeChain({}, { data: REVIEWED_CHANGE, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(from(fetchChain))
@@ -245,10 +279,11 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 200 when engineer rejects a pending change', async () => {
     mockAuthUser('engineer');
-    const fetchChain = makeChain({ data: MOCK_CHANGE, error: null });
-    const historyChain = makeChain({ data: null, error: null });
+    mockUserProfile();
+    const fetchChain = makeChain({}, { data: MOCK_CHANGE, error: null });
+    const historyChain = makeChain({}, { data: null, error: null });
     const rejectedChange = { ...REVIEWED_CHANGE, status: 'rejected' };
-    const updateChain = makeChain({ data: rejectedChange, error: null });
+    const updateChain = makeChain({}, { data: rejectedChange, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(from(fetchChain))
@@ -268,12 +303,13 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('includes conflict warning when a prior approval exists for the same field', async () => {
     mockAuthUser('engineer');
-    const fetchChain = makeChain({ data: MOCK_CHANGE, error: null });
-    const historyChain = makeChain({
+    mockUserProfile();
+    const fetchChain = makeChain({}, { data: MOCK_CHANGE, error: null });
+    const historyChain = makeChain({}, {
       data: { approved_by: 'other-engineer', approved_at: '2026-04-21T10:00:00.000Z' },
       error: null,
     });
-    const updateChain = makeChain({ data: REVIEWED_CHANGE, error: null });
+    const updateChain = makeChain({}, { data: REVIEWED_CHANGE, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(from(fetchChain))
@@ -294,9 +330,10 @@ describe('PATCH /asset-changes/:id/approve', () => {
 
   it('returns 200 for admin approving a change', async () => {
     mockAuthUser('admin');
-    const fetchChain = makeChain({ data: MOCK_CHANGE, error: null });
-    const historyChain = makeChain({ data: null, error: null });
-    const updateChain = makeChain({ data: REVIEWED_CHANGE, error: null });
+    mockUserProfile();
+    const fetchChain = makeChain({}, { data: MOCK_CHANGE, error: null });
+    const historyChain = makeChain({}, { data: null, error: null });
+    const updateChain = makeChain({}, { data: REVIEWED_CHANGE, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(from(fetchChain))

@@ -45,26 +45,53 @@ type MockChain = {
   select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   range: ReturnType<typeof vi.fn>;
   order: ReturnType<typeof vi.fn>;
   single: ReturnType<typeof vi.fn>;
+  maybeSingle: ReturnType<typeof vi.fn>;
+  then?: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => Promise<unknown>;
   [key: string]: unknown;
 };
 
-function mockFromChain(overrides: Record<string, unknown> = {}): MockChain {
-  const chain: MockChain = {
-    select: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    range: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    single: vi.fn().mockReturnThis(),
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = {} as MockChain;
+  Object.assign(chain, {
+    select: vi.fn().mockImplementation(() => chain),
+    insert: vi.fn().mockImplementation(() => chain),
+    update: vi.fn().mockImplementation(() => chain),
+    upsert: vi.fn().mockImplementation(() => chain),
+    delete: vi.fn().mockImplementation(() => chain),
+    eq: vi.fn().mockImplementation(() => chain),
+    neq: vi.fn().mockImplementation(() => chain),
+    in: vi.fn().mockImplementation(() => chain),
+    range: vi.fn().mockImplementation(() => chain),
+    order: vi.fn().mockImplementation(() => chain),
+    single: vi.fn().mockImplementation(() => chain),
+    maybeSingle: vi.fn().mockImplementation(() => chain),
     ...overrides,
-  };
+  });
+  if (resolveWith !== undefined) {
+    chain.then = (resolve, reject) => Promise.resolve(resolveWith).then(resolve, reject);
+  }
+  return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
   vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
   return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 const V_VEHICLE = 'bbbbbbbb-0000-0000-0000-000000000001';
@@ -83,7 +110,7 @@ const MOCK_VEHICLE = {
 
 describe('GET /vehicles', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 401 without auth', async () => {
     vi.mocked(supabaseAnon.auth.getUser).mockResolvedValueOnce({
@@ -96,6 +123,7 @@ describe('GET /vehicles', () => {
 
   it('returns paginated vehicle list', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     mockFromChain({
       order: vi.fn().mockResolvedValue({ data: [MOCK_VEHICLE], count: 1, error: null }),
     });
@@ -111,10 +139,11 @@ describe('GET /vehicles', () => {
 
 describe('POST /vehicles', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const res = await app.request('/vehicles', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -125,6 +154,7 @@ describe('POST /vehicles', () => {
 
   it('returns 422 for missing required fields', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await app.request('/vehicles', {
       method: 'POST',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -137,6 +167,7 @@ describe('POST /vehicles', () => {
 
   it('creates vehicle and returns 201', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const chain = mockFromChain({
       single: vi.fn().mockResolvedValue({ data: MOCK_VEHICLE, error: null }),
     });
@@ -158,6 +189,7 @@ describe('POST /vehicles', () => {
 
   it('returns 409 for duplicate vehicle_code', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const chain = mockFromChain({
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'duplicate key value violates unique constraint' } }),
     });
@@ -174,10 +206,11 @@ describe('POST /vehicles', () => {
 
 describe('GET /vehicles/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 404 when not found', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
     });
@@ -187,6 +220,7 @@ describe('GET /vehicles/:id', () => {
 
   it('returns vehicle by id', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     mockFromChain({
       single: vi.fn().mockResolvedValue({ data: MOCK_VEHICLE, error: null }),
     });
@@ -199,10 +233,11 @@ describe('GET /vehicles/:id', () => {
 
 describe('PATCH /vehicles/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const res = await app.request(`/vehicles/${V_VEHICLE}`, {
       method: 'PATCH',
       headers: { ...authHeader(), 'Content-Type': 'application/json' },
@@ -213,6 +248,7 @@ describe('PATCH /vehicles/:id', () => {
 
   it('updates vehicle plate number', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const updated = { ...MOCK_VEHICLE, plate_number: 'XYZ-9999' };
     const chain = mockFromChain({
       single: vi.fn().mockResolvedValue({ data: updated, error: null }),
@@ -232,10 +268,11 @@ describe('PATCH /vehicles/:id', () => {
 
 describe('DELETE /vehicles/:id', () => {
   let app: ReturnType<typeof makeApp>;
-  beforeEach(() => { app = makeApp(); vi.clearAllMocks(); });
+  beforeEach(() => { app = makeApp(); vi.resetAllMocks(); });
 
   it('returns 403 for engineer role', async () => {
     mockAuthUser('engineer');
+    mockUserProfile();
     const res = await app.request(`/vehicles/${V_VEHICLE}`, {
       method: 'DELETE',
       headers: authHeader(),
@@ -245,6 +282,7 @@ describe('DELETE /vehicles/:id', () => {
 
   it('soft-deletes vehicle for admin', async () => {
     mockAuthUser('admin');
+    mockUserProfile();
     const chain = mockFromChain({
       single: vi.fn().mockResolvedValue({ data: { ...MOCK_VEHICLE, is_active: false }, error: null }),
     });

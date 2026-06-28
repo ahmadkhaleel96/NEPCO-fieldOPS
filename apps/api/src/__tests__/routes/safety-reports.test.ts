@@ -39,28 +39,56 @@ function authHeader() {
 
 type MockChain = {
   select: ReturnType<typeof vi.fn>;
+  insert: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
+  neq: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   range: ReturnType<typeof vi.fn>;
   order: ReturnType<typeof vi.fn>;
   maybeSingle: ReturnType<typeof vi.fn>;
+  single: ReturnType<typeof vi.fn>;
   then?: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => Promise<unknown>;
   [key: string]: unknown;
 };
 
-function makeChain(resolveWith?: unknown): MockChain {
+function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
   const chain = {} as MockChain;
   Object.assign(chain, {
     select:      vi.fn().mockImplementation(() => chain),
+    insert:      vi.fn().mockImplementation(() => chain),
+    update:      vi.fn().mockImplementation(() => chain),
+    upsert:      vi.fn().mockImplementation(() => chain),
+    delete:      vi.fn().mockImplementation(() => chain),
     eq:          vi.fn().mockImplementation(() => chain),
+    neq:         vi.fn().mockImplementation(() => chain),
+    in:          vi.fn().mockImplementation(() => chain),
     range:       vi.fn().mockImplementation(() => chain),
     order:       vi.fn().mockImplementation(() => chain),
     maybeSingle: vi.fn().mockImplementation(() => chain),
+    single:      vi.fn().mockImplementation(() => chain),
+    ...overrides,
   });
   if (resolveWith !== undefined) {
     chain.then = (resolve, reject) =>
       Promise.resolve(resolveWith).then(resolve, reject);
   }
   return chain;
+}
+
+function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
+  const chain = makeChain(overrides, resolveWith);
+  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
+  return chain;
+}
+
+function mockUserProfile(id = 'profile-1') {
+  const chain = makeChain({
+    single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+  });
+  vi.mocked(supabaseAdmin.from).mockReturnValueOnce(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
 }
 
 type MockFromReturn = ReturnType<typeof supabaseAdmin.from>;
@@ -102,6 +130,7 @@ describe('GET /safety-reports', () => {
 
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/safety-reports', { headers: authHeader() });
     expect(res.status).toBe(403);
@@ -109,6 +138,7 @@ describe('GET /safety-reports', () => {
 
   it('returns 403 for team_leader role', async () => {
     mockAuthUser('team_leader');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request('/safety-reports', { headers: authHeader() });
     expect(res.status).toBe(403);
@@ -116,7 +146,8 @@ describe('GET /safety-reports', () => {
 
   it('returns 200 with paginated reports for admin', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: [MOCK_REPORT], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_REPORT], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -130,7 +161,8 @@ describe('GET /safety-reports', () => {
 
   it('returns 200 with paginated reports for engineer', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: [MOCK_REPORT], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_REPORT], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -140,7 +172,8 @@ describe('GET /safety-reports', () => {
 
   it('filters by trip_id', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: [MOCK_REPORT], count: 1, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: [MOCK_REPORT], count: 1, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -158,7 +191,8 @@ describe('GET /safety-reports', () => {
 describe('GET /safety-reports/:id', () => {
   it('returns 200 with report data', async () => {
     mockAuthUser('engineer');
-    const chain = makeChain({ data: MOCK_REPORT, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: MOCK_REPORT, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
@@ -170,6 +204,7 @@ describe('GET /safety-reports/:id', () => {
 
   it('returns 403 for driver role', async () => {
     mockAuthUser('driver');
+    mockUserProfile();
     const app = makeApp();
     const res = await app.request(`/safety-reports/${REPORT_ID}`, { headers: authHeader() });
     expect(res.status).toBe(403);
@@ -177,7 +212,8 @@ describe('GET /safety-reports/:id', () => {
 
   it('returns 404 when report not found', async () => {
     mockAuthUser('admin');
-    const chain = makeChain({ data: null, error: null });
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: null });
     vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
 
     const app = makeApp();
