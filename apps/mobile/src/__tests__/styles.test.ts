@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { Colors, StatusColors } from '../styles/colors';
-import { Spacing, Radius, Shadows } from '../styles/spacing';
+import { Spacing, Radius as _Radius, Shadows } from '../styles/spacing';
 import { Typography } from '../styles/typography';
 
 describe('Colors', () => {
@@ -52,7 +52,7 @@ describe('Typography', () => {
   });
 
   it('all text styles have a fontSize and lineHeight', () => {
-    for (const [key, style] of Object.entries(Typography)) {
+    for (const [_key, style] of Object.entries(Typography)) {
       expect(style).toHaveProperty('fontSize');
       expect(style).toHaveProperty('lineHeight');
       expect(typeof style.fontSize).toBe('number');

@@ -84,11 +84,6 @@ function makeChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): M
   return chain;
 }
 
-function mockFromChain(overrides: Partial<MockChain> = {}, resolveWith?: unknown): MockChain {
-  const chain = makeChain(overrides, resolveWith);
-  vi.mocked(supabaseAdmin.from).mockReturnValue(chain as unknown as ReturnType<typeof supabaseAdmin.from>);
-  return chain;
-}
 
 function mockUserProfile(id = 'profile-1') {
   const chain = makeChain({

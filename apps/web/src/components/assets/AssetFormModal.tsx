@@ -130,8 +130,7 @@ export function AssetFormModal({ asset, onSubmit, onClose, isSubmitting }: Asset
       mapRef.current = null;
       markerRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally only runs on mount
+  }, []); // intentionally only runs on mount — map is initialized once
 
   function onValid(values: AssetFormValues) {
     onSubmit({ ...values, metadata: asset?.metadata ?? {} });

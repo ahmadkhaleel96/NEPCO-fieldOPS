@@ -125,7 +125,7 @@ describe('GET /users', () => {
   it('returns paginated user list for admin', async () => {
     mockAuthUser('admin');
     mockUserProfile();
-    const chain = mockFromChain({
+    mockFromChain({
       order: vi.fn().mockResolvedValue({
         data: [{ id: 'u1', email: 'a@b.com' }],
         count: 1,
@@ -221,7 +221,7 @@ describe('POST /users', () => {
       error: null,
     } as Awaited<ReturnType<typeof supabaseAdmin.auth.admin.createUser>>);
 
-    const chain = mockFromChain({
+    mockFromChain({
       single: vi.fn().mockResolvedValue({
         data: { id: 'u-123', email: 'new@nepco.jo', full_name: 'New User', role: 'driver' },
         error: null,
@@ -247,7 +247,7 @@ describe('GET /users/:id', () => {
   it('allows user to fetch their own record', async () => {
     mockAuthUser('driver', V_SELF);
     mockUserProfile(V_SELF);
-    const chain = mockFromChain({
+    mockFromChain({
       single: vi.fn().mockResolvedValue({
         data: { id: V_SELF, email: 's@s.com' },
         error: null,
@@ -268,7 +268,7 @@ describe('GET /users/:id', () => {
   it('allows admin to fetch any user', async () => {
     mockAuthUser('admin', 'admin-id');
     mockUserProfile();
-    const chain = mockFromChain({
+    mockFromChain({
       single: vi.fn().mockResolvedValue({
         data: { id: V_OTHER, email: 'o@o.com' },
         error: null,

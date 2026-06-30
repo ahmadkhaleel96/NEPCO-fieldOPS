@@ -1,6 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
-import { SubmitInspectionSchema, CreateSafetyReportSchema } from '@fieldops/shared';
+import { SubmitInspectionSchema } from '@fieldops/shared';
 import { authMiddleware, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 import { validateUuid } from '../lib/validate-uuid';

@@ -176,7 +176,7 @@ describe('UpdateAssetSchema', () => {
   });
 
   it('does not allow changing asset_code', () => {
-    const result = UpdateAssetSchema.safeParse({ asset_code: 'NEW-CODE' });
+    const _result = UpdateAssetSchema.safeParse({ asset_code: 'NEW-CODE' });
     // asset_code is omitted, so extra keys are stripped (strict mode off by default)
     const parsed = UpdateAssetSchema.parse({ asset_code: 'NEW-CODE' });
     expect((parsed as Record<string, unknown>).asset_code).toBeUndefined();

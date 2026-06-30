@@ -41,7 +41,6 @@ Object.defineProperty(global, 'crypto', {
 });
 
 // Import after mocks are set up
-// eslint-disable-next-line import/first
 import InspectAssetScreen from '../../app/(app)/inspect/[assetId]';
 
 const MOCK_ASSET = {

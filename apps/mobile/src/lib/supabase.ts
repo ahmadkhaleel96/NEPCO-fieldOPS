@@ -12,7 +12,7 @@ import * as SecureStore from 'expo-secure-store';
  * NEVER use AsyncStorage for tokens — it is plaintext.
  */
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string): string | null => {
+  getItem: (_key: string): string | null => {
     // Synchronous wrapper — SecureStore is async but Supabase expects sync
     // In practice this returns null on first call; the async path is used
     return null;

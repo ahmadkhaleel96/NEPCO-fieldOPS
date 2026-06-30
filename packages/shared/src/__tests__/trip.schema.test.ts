@@ -4,7 +4,7 @@ import {
   PostTripLocationsSchema,
   SiteArrivalSchema,
   TripSchema,
-  NfcEventSchema,
+  NfcEventSchema as _NfcEventSchema,
   NfcEventTypeSchema,
   TripTrackResponseSchema,
 } from '../schemas/trip.schema';

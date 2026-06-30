@@ -4,7 +4,7 @@ import {
   IncompleteReasonSchema,
   ApprovalStatusSchema,
   SubmitInspectionSchema,
-  AssetInspectionSchema,
+  AssetInspectionSchema as _AssetInspectionSchema,
   AssetChangeSchema,
   ReviewChangeSchema,
   CreateSafetyReportSchema,
