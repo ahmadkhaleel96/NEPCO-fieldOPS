@@ -68,4 +68,6 @@ export type {
   ResolveFollowUpTaskPayload,
   ApiClientSafetyReport,
   RevokeSessionPayload,
+  BulkImportAssetRow,
+  BulkImportResult,
 } from './client';

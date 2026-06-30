@@ -175,7 +175,7 @@ describe('POST /auth/revoke', () => {
     vi.mocked(supabaseAdmin.auth.admin.signOut).mockResolvedValueOnce({
       data: {},
       error: null,
-    } as Awaited<ReturnType<typeof supabaseAdmin.auth.admin.signOut>>);
+    } as unknown as Awaited<ReturnType<typeof supabaseAdmin.auth.admin.signOut>>);
 
     const res = await makeApp().request('/auth/revoke', {
       method: 'POST',
@@ -198,7 +198,7 @@ describe('POST /auth/revoke', () => {
     vi.mocked(supabaseAdmin.auth.admin.signOut).mockResolvedValueOnce({
       data: {},
       error: { message: 'Auth service error', name: 'AuthError', status: 500 },
-    } as Awaited<ReturnType<typeof supabaseAdmin.auth.admin.signOut>>);
+    } as unknown as Awaited<ReturnType<typeof supabaseAdmin.auth.admin.signOut>>);
 
     const res = await makeApp().request('/auth/revoke', {
       method: 'POST',

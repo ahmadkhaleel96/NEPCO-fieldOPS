@@ -256,7 +256,7 @@ export function AssetsPage() {
             </ul>
             {importResult.errors.length > 0 && (
               <ul className={styles.errorList}>
-                {importResult.errors.map((e) => (
+                {importResult.errors.map((e: { row: number; message: string }) => (
                   <li key={e.row}>Row {e.row}: {e.message}</li>
                 ))}
               </ul>

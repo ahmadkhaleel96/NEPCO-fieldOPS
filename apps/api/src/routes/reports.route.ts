@@ -155,7 +155,7 @@ reportsRoutes.post('/generate', requireRole('admin'), async (c) => {
     .gte('created_at', periodStart)
     .lte('created_at', periodEnd);
 
-  const inspectionsArr = (inspections ?? []) as Array<{
+  const inspectionsArr = (inspections ?? []) as unknown as Array<{
     id: string;
     assets: { asset_type: string } | null;
   }>;

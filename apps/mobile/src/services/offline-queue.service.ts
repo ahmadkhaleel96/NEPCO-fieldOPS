@@ -58,11 +58,11 @@ export async function flush(client: ApiClient): Promise<void> {
     try {
       if (op.type === 'nfc_arrival') {
         await client.nfcEvents.recordArrival(
-          op.payload as Parameters<typeof client.nfcEvents.recordArrival>[0],
+          op.payload as unknown as Parameters<typeof client.nfcEvents.recordArrival>[0],
         );
       } else if (op.type === 'inspection_submit') {
         await client.assetInspections.submit(
-          op.payload as Parameters<typeof client.assetInspections.submit>[0],
+          op.payload as unknown as Parameters<typeof client.assetInspections.submit>[0],
         );
       }
     } catch {
