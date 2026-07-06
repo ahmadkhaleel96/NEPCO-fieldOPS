@@ -61,6 +61,43 @@ export async function notifyPermitWithdrawn(payload: PermitWithdrawnPayload): Pr
   await dispatch(recipients, subject, body);
 }
 
+export interface ReportReadyPayload {
+  reportId: string;
+  cadence: string;
+  periodStart: string;
+  periodEnd: string;
+  pdfUrl: string;
+  recipientEmails: string[];
+}
+
+export async function notifyReportReady(payload: ReportReadyPayload): Promise<void> {
+  const { cadence, periodStart, periodEnd, pdfUrl, recipientEmails } = payload;
+  if (recipientEmails.length === 0) return;
+
+  const amman = { timeZone: 'Asia/Amman' } as const;
+  const start = new Date(periodStart).toLocaleDateString('en-JO', amman);
+  const end   = new Date(periodEnd).toLocaleDateString('en-JO', amman);
+
+  const subject = `NEPCO FieldOps Report — ${cadence.replace(/_/g, ' ')} (${start} – ${end})`;
+  const body =
+    `Your scheduled operations report is ready.\n\n` +
+    `Cadence: ${cadence.replace(/_/g, ' ')}\n` +
+    `Period:  ${start} – ${end}\n\n` +
+    `Download PDF: ${pdfUrl}\n\n` +
+    `This report is archived in the NEPCO FieldOps system.`;
+
+  const results = await Promise.allSettled(
+    recipientEmails.map((email) => sendEmail(email, subject, body))
+  );
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      process.stderr.write(
+        JSON.stringify({ level: 'error', message: 'Report notification failed', reason: String(result.reason) }) + '\n',
+      );
+    }
+  }
+}
+
 async function dispatch(
   recipients: NotifyRecipient[],
   subject: string,

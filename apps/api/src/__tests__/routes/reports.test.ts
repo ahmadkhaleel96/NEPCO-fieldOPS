@@ -11,6 +11,16 @@ vi.mock('../../lib/redis', () => ({
   reportGenerationRateLimiter: { limit: vi.fn() },
 }));
 
+const { mockGenerateReportPdf, mockUploadToR2, mockNotifyReportReady } = vi.hoisted(() => ({
+  mockGenerateReportPdf:  vi.fn().mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46])),
+  mockUploadToR2:         vi.fn().mockResolvedValue('https://r2.example.com/reports/2026/monthly/RPT-test.pdf'),
+  mockNotifyReportReady:  vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../lib/pdf',    () => ({ generateReportPdf: (...args: unknown[]) => mockGenerateReportPdf(...args) }));
+vi.mock('../../lib/r2',     () => ({ uploadToR2:        (...args: unknown[]) => mockUploadToR2(...args) }));
+vi.mock('../../lib/notify', () => ({ notifyReportReady: (...args: unknown[]) => mockNotifyReportReady(...args) }));
+
 // Web Crypto is available globally in Node 19+; polyfill for older versions
 if (!globalThis.crypto?.subtle) {
   const nodeCrypto = await import('node:crypto');
@@ -140,6 +150,9 @@ beforeEach(() => {
     remaining: 1,
     pending: Promise.resolve(),
   });
+  mockGenerateReportPdf.mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
+  mockUploadToR2.mockResolvedValue('https://r2.example.com/reports/2026/monthly/RPT-test.pdf');
+  mockNotifyReportReady.mockResolvedValue(undefined);
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -428,6 +441,25 @@ describe('POST /reports/:id/verify', () => {
 // POST /reports/:id/regenerate-pdf
 // ──────────────────────────────────────────────────────────────────────────────
 
+const FULL_REPORT_ROW = {
+  id: V_REPORT,
+  cadence: 'monthly',
+  period_start: '2026-04-01T00:00:00.000Z',
+  period_end: '2026-04-30T23:59:59.000Z',
+  data: {
+    period_start: '2026-04-01T00:00:00.000Z',
+    period_end: '2026-04-30T23:59:59.000Z',
+    cadence: 'monthly',
+    summary: {
+      total_permits: 5, completed_permits: 3, incomplete_permits: 1, suspended_permits: 1,
+      total_trips: 4, total_inspections: 10, approved_changes: 2, rejected_changes: 1,
+      safety_reports: 0, total_nfc_events: 20,
+    },
+    by_asset_type: [],
+    by_engineer: [],
+  },
+};
+
 describe('POST /reports/:id/regenerate-pdf', () => {
   it('returns 403 for engineer (admin only)', async () => {
     mockAuthUser('engineer');
@@ -452,19 +484,69 @@ describe('POST /reports/:id/regenerate-pdf', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 200 and queues PDF job', async () => {
+  it('returns 200 with pdf_url after generating and uploading PDF', async () => {
     mockAuthUser('admin');
     mockUserProfile();
-    const chain = makeChain({}, { data: { id: V_REPORT, cadence: 'monthly', period_start: '2026-04-01T00:00:00.000Z', period_end: '2026-04-30T23:59:59.000Z' }, error: null });
-    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(from(chain));
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(from(makeChain({}, { data: FULL_REPORT_ROW, error: null })))  // fetch report
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))             // update pdf_url + csv_sent_at
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })));              // report_recipients
 
     const res = await makeApp().request(`/reports/${V_REPORT}/regenerate-pdf`, {
       method: 'POST',
       headers: authHeader(),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { data: { report_id: string; message: string } };
+    const body = await res.json() as { data: { report_id: string; pdf_url: string } };
     expect(body.data.report_id).toBe(V_REPORT);
-    expect(body.data.message).toMatch(/queued/i);
+    expect(body.data.pdf_url).toMatch(/\.pdf$/);
+  });
+
+  it('calls generateReportPdf with the full report data', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(from(makeChain({}, { data: FULL_REPORT_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })));
+
+    await makeApp().request(`/reports/${V_REPORT}/regenerate-pdf`, {
+      method: 'POST',
+      headers: authHeader(),
+    });
+
+    expect(mockGenerateReportPdf).toHaveBeenCalledWith(
+      expect.objectContaining({ id: V_REPORT, cadence: 'monthly' })
+    );
+    expect(mockUploadToR2).toHaveBeenCalledWith(
+      expect.stringContaining(`RPT-${V_REPORT}.pdf`),
+      expect.any(Uint8Array),
+      'application/pdf'
+    );
+  });
+
+  it('notifies recipients when they exist for the cadence', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+
+    const recipients = [{ email: 'ceo@nepco.jo' }, { email: 'ops@nepco.jo' }];
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(from(makeChain({}, { data: FULL_REPORT_ROW, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: recipients, error: null })));
+
+    await makeApp().request(`/reports/${V_REPORT}/regenerate-pdf`, {
+      method: 'POST',
+      headers: authHeader(),
+    });
+
+    expect(mockNotifyReportReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reportId: V_REPORT,
+        recipientEmails: ['ceo@nepco.jo', 'ops@nepco.jo'],
+      })
+    );
   });
 });

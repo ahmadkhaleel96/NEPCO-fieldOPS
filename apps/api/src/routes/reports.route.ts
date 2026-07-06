@@ -5,6 +5,9 @@ import { authMiddleware, requireRole, type AuthVariables } from '../middleware/a
 import { supabaseAdmin } from '../lib/supabase';
 import { reportGenerationRateLimiter } from '../lib/redis';
 import { validateUuid } from '../lib/validate-uuid';
+import { generateReportPdf } from '../lib/pdf';
+import { uploadToR2 } from '../lib/r2';
+import { notifyReportReady } from '../lib/notify';
 
 export const reportsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -298,21 +301,55 @@ reportsRoutes.post('/:id/verify', async (c) => {
 // ─── POST /reports/:id/regenerate-pdf ─────────────────────────────────────────
 
 reportsRoutes.post('/:id/regenerate-pdf', requireRole('admin'), async (c) => {
-  validateUuid(c.req.param('id'));
+  const id = c.req.param('id');
+  validateUuid(id);
+
   const { data: report, error } = await supabaseAdmin
     .from('reports')
-    .select('id, cadence, period_start, period_end')
-    .eq('id', c.req.param('id'))
+    .select('id, cadence, period_start, period_end, data')
+    .eq('id', id)
     .single();
 
   if (error || !report) throw new HTTPException(404, { message: 'Report not found' });
 
-  // Production: enqueue Puppeteer PDF generation via BullMQ, upload to Cloudflare R2
-  return c.json({
-    success: true,
-    data: {
-      report_id: (report as { id: string }).id,
-      message: 'PDF regeneration queued',
-    },
-  });
+  const r = report as {
+    id: string;
+    cadence: string;
+    period_start: string;
+    period_end: string;
+    data: ReportData;
+  };
+
+  // Generate PDF bytes synchronously in-process (pdf-lib, no browser needed)
+  const pdfBytes = await generateReportPdf(r);
+
+  // Upload to Cloudflare R2 at reports/{year}/{cadence}/RPT-{id}.pdf
+  const year = new Date(r.period_start).getUTCFullYear();
+  const key = `reports/${year}/${r.cadence}/RPT-${r.id}.pdf`;
+  const pdfUrl = await uploadToR2(key, pdfBytes, 'application/pdf');
+
+  // Persist pdf_url and mark distribution timestamp in a single update
+  await supabaseAdmin
+    .from('reports')
+    .update({ pdf_url: pdfUrl, csv_sent_at: new Date().toISOString() })
+    .eq('id', id);
+
+  // Fetch cadence-specific distribution recipients and notify (fire-and-forget)
+  const { data: recipients } = await supabaseAdmin
+    .from('report_recipients')
+    .select('email')
+    .eq('cadence', r.cadence);
+
+  const recipientEmails = ((recipients ?? []) as Array<{ email: string }>).map((row) => row.email);
+
+  notifyReportReady({
+    reportId: r.id,
+    cadence: r.cadence,
+    periodStart: r.period_start,
+    periodEnd: r.period_end,
+    pdfUrl,
+    recipientEmails,
+  }).catch(() => {});
+
+  return c.json({ success: true, data: { report_id: r.id, pdf_url: pdfUrl } });
 });
