@@ -1,0 +1,70 @@
+version: '3.9'
+
+# Local development infrastructure.
+# Production uses Supabase Pro (managed) + Upstash Redis (managed).
+# This compose file provides local equivalents for offline development.
+
+services:
+  # Supabase local stack (database + auth + realtime + storage)
+  supabase-db:
+    image: supabase/postgres:15.6.1.40
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fieldops
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d fieldops']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for rate limiting + BullMQ job queue (local)
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # API server (local development)
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile.dev
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      API_PORT: '3000'
+      SUPABASE_URL: http://supabase-db:5432
+      SUPABASE_ANON_KEY: dev-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: dev-service-role-key
+      UPSTASH_REDIS_REST_URL: http://redis:6379
+      UPSTASH_REDIS_REST_TOKEN: dev-token
+      CORS_ORIGINS: http://localhost:5173
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../apps/api/src:/app/src:ro
+    develop:
+      watch:
+        - action: sync
+          path: ../apps/api/src
+          target: /app/src
+
+volumes:
+  supabase_data:
+  redis_data:
