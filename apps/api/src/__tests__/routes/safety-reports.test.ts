@@ -177,6 +177,31 @@ describe('GET /safety-reports', () => {
     expect(res.status).toBe(200);
     expect(chain.eq).toHaveBeenCalledWith('trip_id', tripId);
   });
+
+  it('returns 500 on DB error', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, count: null, error: { message: 'DB error' } });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
+
+    const app = makeApp();
+    const res = await app.request('/safety-reports', { headers: authHeader() });
+    expect(res.status).toBe(500);
+  });
+
+  it('returns 200 with empty data when DB returns null data and null count', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, count: null, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
+
+    const app = makeApp();
+    const res = await app.request('/safety-reports', { headers: authHeader() });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: unknown[]; pagination: { total: number } };
+    expect(body.data).toEqual([]);
+    expect(body.pagination.total).toBe(0);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -214,5 +239,16 @@ describe('GET /safety-reports/:id', () => {
     const app = makeApp();
     const res = await app.request(`/safety-reports/${REPORT_ID}`, { headers: authHeader() });
     expect(res.status).toBe(404);
+  });
+
+  it('returns 500 on DB error', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, error: { message: 'DB error' } });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
+
+    const app = makeApp();
+    const res = await app.request(`/safety-reports/${REPORT_ID}`, { headers: authHeader() });
+    expect(res.status).toBe(500);
   });
 });

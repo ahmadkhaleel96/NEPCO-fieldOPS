@@ -3,6 +3,8 @@ import {
   ReportCadenceSchema,
   ReportDataSchema,
   ReportSchema,
+  GenerateReportSchema,
+  IntegrityAlertSchema,
 } from '../schemas/report.schema';
 
 const uuid = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -108,5 +110,60 @@ describe('ReportSchema', () => {
     expect(
       ReportSchema.safeParse({ ...validReport, pdf_url: 'not-a-url' }).success
     ).toBe(false);
+  });
+});
+
+describe('GenerateReportSchema', () => {
+  const valid = {
+    cadence: 'monthly',
+    period_start: '2026-04-01T00:00:00.000Z',
+    period_end: '2026-04-30T23:59:59.000Z',
+  };
+
+  it('accepts a valid generate request', () => {
+    expect(GenerateReportSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('rejects an unknown cadence', () => {
+    expect(GenerateReportSchema.safeParse({ ...valid, cadence: 'hourly' }).success).toBe(false);
+  });
+
+  it('rejects when period_start is after period_end', () => {
+    expect(
+      GenerateReportSchema.safeParse({ ...valid, period_start: valid.period_end, period_end: valid.period_start }).success
+    ).toBe(false);
+  });
+
+  it('rejects when period_start equals period_end', () => {
+    expect(
+      GenerateReportSchema.safeParse({ ...valid, period_start: valid.period_end }).success
+    ).toBe(false);
+  });
+
+  it('rejects non-ISO period_start', () => {
+    expect(GenerateReportSchema.safeParse({ ...valid, period_start: '2026-04-01' }).success).toBe(false);
+  });
+});
+
+describe('IntegrityAlertSchema', () => {
+  const valid = {
+    id: uuid(1),
+    report_id: uuid(2),
+    detected_at: '2026-05-01T00:00:00.000Z',
+    stored_hash: 'a'.repeat(64),
+    actual_hash: 'b'.repeat(64),
+    resolved: false,
+  };
+
+  it('accepts a valid integrity alert', () => {
+    expect(IntegrityAlertSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('accepts a resolved alert', () => {
+    expect(IntegrityAlertSchema.safeParse({ ...valid, resolved: true }).success).toBe(true);
+  });
+
+  it('rejects non-uuid report_id', () => {
+    expect(IntegrityAlertSchema.safeParse({ ...valid, report_id: 'bad' }).success).toBe(false);
   });
 });

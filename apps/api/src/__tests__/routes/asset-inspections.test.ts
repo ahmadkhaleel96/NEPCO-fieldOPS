@@ -138,6 +138,17 @@ describe('POST /asset-inspections', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 400 for malformed JSON body', async () => {
+    mockAuthUser('technician');
+    mockUserProfile();
+    const res = await makeApp().request('/asset-inspections', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 422 on invalid body', async () => {
     mockAuthUser('technician');
     mockUserProfile();

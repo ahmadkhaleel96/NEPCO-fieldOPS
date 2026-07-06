@@ -127,6 +127,18 @@ describe('POST /nfc-events', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('driver');
+    mockUserProfile();
+    const app = makeApp();
+    const res = await app.request('/nfc-events', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 422 for invalid body', async () => {
     mockAuthUser('driver');
     mockUserProfile();

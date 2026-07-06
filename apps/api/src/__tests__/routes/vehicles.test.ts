@@ -152,6 +152,17 @@ describe('POST /vehicles', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const res = await app.request('/vehicles', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 422 for missing required fields', async () => {
     mockAuthUser('engineer');
     mockUserProfile();
@@ -202,6 +213,22 @@ describe('POST /vehicles', () => {
     });
     expect(res.status).toBe(409);
   });
+
+  it('returns 500 for non-unique DB error', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const chain = mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'connection timeout' } }),
+    });
+    chain.select.mockReturnValue(chain);
+
+    const res = await app.request('/vehicles', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicle_code: 'VH-001', plate_number: 'ABC-1234' }),
+    });
+    expect(res.status).toBe(500);
+  });
 });
 
 describe('GET /vehicles/:id', () => {
@@ -246,6 +273,28 @@ describe('PATCH /vehicles/:id', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
+      method: 'PATCH',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 422 for invalid update data', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
+      method: 'PATCH',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: 'not-a-boolean' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
   it('updates vehicle plate number', async () => {
     mockAuthUser('admin');
     mockUserProfile();
@@ -263,6 +312,34 @@ describe('PATCH /vehicles/:id', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { success: boolean; data: typeof MOCK_VEHICLE };
     expect(body.data.plate_number).toBe('XYZ-9999');
+  });
+
+  it('returns 500 when vehicle not found in DB', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+    });
+    const res = await app.request(`/vehicles/${V_VEHICLE}`, {
+      method: 'PATCH',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plate_number: 'XYZ-9999' }),
+    });
+    expect(res.status).toBe(500);
+  });
+
+  it('returns 500 on DB connection error', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    mockFromChain({
+      single: vi.fn().mockResolvedValue({ data: null, error: { message: 'connection error' } }),
+    });
+    const res = await app.request(`/vehicles/${V_NOT_FOUND}`, {
+      method: 'PATCH',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plate_number: 'XYZ-9999' }),
+    });
+    expect(res.status).toBe(500);
   });
 });
 

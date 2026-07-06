@@ -188,6 +188,18 @@ describe('POST /work-permits', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const app = makeApp();
+    const res = await app.request('/work-permits', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 422 for invalid body', async () => {
     mockAuthUser('engineer');
     mockUserProfile();
@@ -309,6 +321,18 @@ describe('POST /work-permits/:id/withdraw', () => {
       body: JSON.stringify({ reason: 'Safety concern on site, must postpone.' }),
     });
     expect(res.status).toBe(403);
+  });
+
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const app = makeApp();
+    const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
   });
 
   it('returns 422 when reason is too short', async () => {

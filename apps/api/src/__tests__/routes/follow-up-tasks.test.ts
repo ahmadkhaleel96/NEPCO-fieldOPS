@@ -183,6 +183,31 @@ describe('GET /follow-up-tasks', () => {
     expect(res.status).toBe(200);
     expect(chain.not).toHaveBeenCalledWith('resolved_at', 'is', null);
   });
+
+  it('returns 500 on DB error', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, count: null, error: { message: 'DB error' } });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
+
+    const app = makeApp();
+    const res = await app.request('/follow-up-tasks', { headers: authHeader() });
+    expect(res.status).toBe(500);
+  });
+
+  it('returns 200 with empty data when DB returns null data and null count', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    const chain = makeChain({}, { data: null, count: null, error: null });
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(chain));
+
+    const app = makeApp();
+    const res = await app.request('/follow-up-tasks', { headers: authHeader() });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: unknown[]; pagination: { total: number } };
+    expect(body.data).toEqual([]);
+    expect(body.pagination.total).toBe(0);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -230,6 +255,18 @@ describe('PATCH /follow-up-tasks/:id/resolve', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(403);
+  });
+
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const app = makeApp();
+    const res = await app.request(`/follow-up-tasks/${TASK_ID}/resolve`, {
+      method: 'PATCH',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
   });
 
   it('returns 422 for invalid payload', async () => {

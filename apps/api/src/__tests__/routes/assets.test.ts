@@ -299,6 +299,19 @@ describe('POST /assets/bulk-import', () => {
     expect(body.data.errors).toHaveLength(1);
     expect(body.data.errors[0].row).toBe(2);
   });
+
+  it('returns 500 when the database upsert fails', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    mockFromChain({}, { data: null, error: { message: 'DB connection error' } });
+
+    const res = await app.request('/assets/bulk-import', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: [VALID_ROW] }),
+    });
+    expect(res.status).toBe(500);
+  });
 });
 
 describe('GET /assets/:id', () => {

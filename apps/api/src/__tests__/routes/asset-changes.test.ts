@@ -207,6 +207,17 @@ describe('PATCH /asset-changes/:id/approve', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 400 for invalid JSON body', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const res = await makeApp().request(`/asset-changes/${V_CHANGE}/approve`, {
+      method: 'PATCH',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: 'not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 422 on invalid body', async () => {
     mockAuthUser('engineer');
     mockUserProfile();
