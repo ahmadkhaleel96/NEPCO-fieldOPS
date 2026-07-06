@@ -11,6 +11,16 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
+const { mockNotifyPermitIssued, mockNotifyPermitWithdrawn } = vi.hoisted(() => ({
+  mockNotifyPermitIssued: vi.fn().mockResolvedValue(undefined),
+  mockNotifyPermitWithdrawn: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../lib/notify', () => ({
+  notifyPermitIssued: (...args: unknown[]) => mockNotifyPermitIssued(...args),
+  notifyPermitWithdrawn: (...args: unknown[]) => mockNotifyPermitWithdrawn(...args),
+}));
+
 const { supabaseAnon, supabaseAdmin } = await import('../../lib/supabase');
 const { workPermitsRoutes } = await import('../../routes/work-permits.route');
 
@@ -126,6 +136,8 @@ const VALID_CREATE_BODY = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mockNotifyPermitIssued.mockResolvedValue(undefined);
+  mockNotifyPermitWithdrawn.mockResolvedValue(undefined);
 });
 
 describe('GET /work-permits', () => {
@@ -192,17 +204,20 @@ describe('POST /work-permits', () => {
     mockAuthUser('engineer');
     mockUserProfile();
 
-    // Call 1: insert permit
-    const permitChain = makeChain({}, { data: MOCK_PERMIT, error: null });
-    // Call 2: insert permit_assets (fire-and-forget, just needs a thenable)
-    const assetsChain = makeChain({}, { data: null, error: null });
-    // Call 3: insert permit_members
+    const permitChain  = makeChain({}, { data: MOCK_PERMIT, error: null });
+    const assetsChain  = makeChain({}, { data: null, error: null });
     const membersChain = makeChain({}, { data: null, error: null });
+    // notify: member emails lookup
+    const memberUsersChain = makeChain({}, { data: [], error: null });
+    // notify: engineer name lookup
+    const engineerChain = makeChain({}, { data: { full_name: 'Test Engineer' }, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
       .mockReturnValueOnce(assetsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
-      .mockReturnValueOnce(membersChain as unknown as ReturnType<typeof supabaseAdmin.from>);
+      .mockReturnValueOnce(membersChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(memberUsersChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(engineerChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
     const res = await app.request('/work-permits', {
@@ -220,14 +235,18 @@ describe('POST /work-permits', () => {
     mockAuthUser('engineer');
     mockUserProfile();
 
-    const permitChain = makeChain({}, { data: MOCK_PERMIT, error: null });
-    const assetsChain = makeChain({}, { data: null, error: null });
-    const membersChain = makeChain({}, { data: null, error: null });
+    const permitChain      = makeChain({}, { data: MOCK_PERMIT, error: null });
+    const assetsChain      = makeChain({}, { data: null, error: null });
+    const membersChain     = makeChain({}, { data: null, error: null });
+    const memberUsersChain = makeChain({}, { data: [], error: null });
+    const engineerChain    = makeChain({}, { data: { full_name: 'Engineer' }, error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
       .mockReturnValueOnce(assetsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
-      .mockReturnValueOnce(membersChain as unknown as ReturnType<typeof supabaseAdmin.from>);
+      .mockReturnValueOnce(membersChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(memberUsersChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(engineerChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
     await app.request('/work-permits', {
@@ -326,17 +345,17 @@ describe('POST /work-permits/:id/withdraw', () => {
     mockAuthUser('engineer');
     mockUserProfile();
 
-    const tripsChain = makeChain({}, { data: null, error: null });
-    const permitChain = makeChain({}, {
-      data: { ...MOCK_PERMIT, status: 'withdrawn' },
-      error: null,
-    });
-    const eventsChain = makeChain({}, { data: null, error: null });
+    const tripsChain   = makeChain({}, { data: null, error: null });
+    const permitChain  = makeChain({}, { data: { ...MOCK_PERMIT, status: 'withdrawn' }, error: null });
+    const eventsChain  = makeChain({}, { data: null, error: null });
+    // notify: member lookup
+    const notifyMembersChain = makeChain({}, { data: [], error: null });
 
     vi.mocked(supabaseAdmin.from)
       .mockReturnValueOnce(tripsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
       .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
-      .mockReturnValueOnce(eventsChain as unknown as ReturnType<typeof supabaseAdmin.from>);
+      .mockReturnValueOnce(eventsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(notifyMembersChain as unknown as ReturnType<typeof supabaseAdmin.from>);
 
     const app = makeApp();
     const res = await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
@@ -369,5 +388,81 @@ describe('POST /work-permits/:id/withdraw', () => {
       body: JSON.stringify({ reason: 'Safety concern on site, must postpone.' }),
     });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('Permit notifications', () => {
+  const MEMBER = { email: 'driver@nepco.jo', phone: '+962791000001', full_name: 'Ali Driver' };
+
+  it('calls notifyPermitIssued with member details after permit creation', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+
+    const permitChain      = makeChain({}, { data: MOCK_PERMIT, error: null });
+    const assetsChain      = makeChain({}, { data: null, error: null });
+    const membersChain     = makeChain({}, { data: null, error: null });
+    const memberUsersChain = makeChain({}, { data: [MEMBER], error: null });
+    const engineerChain    = makeChain({}, { data: { full_name: 'Sara Engineer' }, error: null });
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(assetsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(membersChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(memberUsersChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(engineerChain as unknown as ReturnType<typeof supabaseAdmin.from>);
+
+    const app = makeApp();
+    await app.request('/work-permits', {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(VALID_CREATE_BODY),
+    });
+
+    // Allow the fire-and-forget promise to settle
+    await Promise.resolve();
+
+    expect(mockNotifyPermitIssued).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permitType: 'maintenance',
+        engineerName: 'Sara Engineer',
+        recipients: [MEMBER],
+      })
+    );
+  });
+
+  it('calls notifyPermitWithdrawn with member details after withdrawal', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+
+    const tripsChain  = makeChain({}, { data: null, error: null });
+    const permitChain = makeChain({}, { data: { ...MOCK_PERMIT, status: 'withdrawn' }, error: null });
+    const eventsChain = makeChain({}, { data: null, error: null });
+    const notifyMembersChain = makeChain({}, {
+      data: [{ users: MEMBER }],
+      error: null,
+    });
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(tripsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(permitChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(eventsChain as unknown as ReturnType<typeof supabaseAdmin.from>)
+      .mockReturnValueOnce(notifyMembersChain as unknown as ReturnType<typeof supabaseAdmin.from>);
+
+    const reason = 'Safety concern on site, must postpone.';
+    const app = makeApp();
+    await app.request(`/work-permits/${V_PERMIT}/withdraw`, {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+
+    await Promise.resolve();
+
+    expect(mockNotifyPermitWithdrawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        withdrawalReason: reason,
+        recipients: [MEMBER],
+      })
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 import { validateUuid } from '../lib/validate-uuid';
+import { notifyPermitIssued, notifyPermitWithdrawn } from '../lib/notify';
 
 export const workPermitsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>();
 
@@ -113,6 +114,27 @@ workPermitsRoutes.post('/', requireRole('admin', 'engineer'), async (c) => {
   const memberRows = uniqueMemberIds.map((user_id) => ({ permit_id: permitId, user_id }));
   await supabaseAdmin.from('permit_members').insert(memberRows);
 
+  // Fetch member details for notifications (fire-and-forget)
+  const { data: memberUsers } = await supabaseAdmin
+    .from('users')
+    .select('email, phone, full_name')
+    .in('id', uniqueMemberIds);
+
+  const { data: engineer } = await supabaseAdmin
+    .from('users')
+    .select('full_name')
+    .eq('id', engineerId)
+    .single();
+
+  notifyPermitIssued({
+    permitId,
+    permitType: permit_type,
+    scheduledStart: scheduled_start,
+    scheduledEnd: scheduled_end,
+    engineerName: (engineer as { full_name: string } | null)?.full_name ?? 'Engineer',
+    recipients: (memberUsers ?? []) as { email: string; phone: string | null; full_name: string }[],
+  }).catch(() => {});
+
   return c.json({ success: true, data: permit }, 201);
 });
 
@@ -194,6 +216,22 @@ workPermitsRoutes.post('/:id/withdraw', requireRole('admin', 'engineer'), async 
     client_id: crypto.randomUUID(),
     client_timestamp: new Date().toISOString(),
   });
+
+  // Notify permit members of the withdrawal (fire-and-forget)
+  const { data: members } = await supabaseAdmin
+    .from('permit_members')
+    .select('users(email, phone, full_name)')
+    .eq('permit_id', id);
+
+  const recipients = (members ?? [])
+    .map((m) => (m as unknown as { users: { email: string; phone: string | null; full_name: string } | null }).users)
+    .filter((u): u is { email: string; phone: string | null; full_name: string } => u !== null);
+
+  notifyPermitWithdrawn({
+    permitId: id,
+    withdrawalReason: parsed.data.reason,
+    recipients,
+  }).catch(() => {});
 
   return c.json({ success: true, data });
 });
