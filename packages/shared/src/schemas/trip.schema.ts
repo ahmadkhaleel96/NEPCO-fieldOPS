@@ -94,3 +94,14 @@ export const TripTrackResponseSchema = z.object({
 });
 
 export type TripTrackResponse = z.infer<typeof TripTrackResponseSchema>;
+
+/** Body posted by the driver when ending a trip (lat/lng are optional if GPS unavailable) */
+export const EndTripSchema = z.object({
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+}).refine(
+  (d) => (d.lat === undefined) === (d.lng === undefined),
+  { message: 'lat and lng must both be provided or both omitted', path: ['lat'] }
+);
+
+export type EndTrip = z.infer<typeof EndTripSchema>;

@@ -7,6 +7,7 @@ import {
   NfcEventSchema as _NfcEventSchema,
   NfcEventTypeSchema,
   TripTrackResponseSchema,
+  EndTripSchema,
 } from '../schemas/trip.schema';
 
 const uuid = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -158,5 +159,31 @@ describe('TripTrackResponseSchema', () => {
         has_gaps: false,
       }).success
     ).toBe(false);
+  });
+});
+
+describe('EndTripSchema', () => {
+  it('accepts empty body (GPS unavailable)', () => {
+    expect(EndTripSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('accepts valid lat and lng', () => {
+    expect(EndTripSchema.safeParse({ lat: 31.95, lng: 35.91 }).success).toBe(true);
+  });
+
+  it('rejects lat without lng', () => {
+    expect(EndTripSchema.safeParse({ lat: 31.95 }).success).toBe(false);
+  });
+
+  it('rejects lng without lat', () => {
+    expect(EndTripSchema.safeParse({ lng: 35.91 }).success).toBe(false);
+  });
+
+  it('rejects out-of-range lat', () => {
+    expect(EndTripSchema.safeParse({ lat: 91, lng: 35.91 }).success).toBe(false);
+  });
+
+  it('rejects out-of-range lng', () => {
+    expect(EndTripSchema.safeParse({ lat: 31.95, lng: 181 }).success).toBe(false);
   });
 });

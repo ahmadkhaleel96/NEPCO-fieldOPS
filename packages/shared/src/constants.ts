@@ -13,6 +13,9 @@ export const GPS_INTERVAL_MOVING_S = 15;
 /** GPS polling interval once site tag has been scanned (seconds) */
 export const GPS_INTERVAL_STATIONARY_S = 60;
 
+/** Gap threshold: consecutive GPS points further apart than this indicate missing coverage (seconds) */
+export const GPS_GAP_THRESHOLD_S = 5 * 60; // 5 minutes
+
 /** GPS batch size before sending to server */
 export const GPS_BATCH_SIZE = 10;
 

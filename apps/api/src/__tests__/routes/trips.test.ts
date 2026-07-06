@@ -361,11 +361,51 @@ describe('GET /trips/:id/track', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as {
       success: boolean;
-      data: { type: string; coordinates: number[][] };
+      data: { type: string; coordinates: number[][]; has_gaps: boolean };
     };
     expect(body.data.type).toBe('LineString');
     expect(body.data.coordinates).toHaveLength(2);
     expect(body.data.coordinates[0]).toEqual([35.91, 31.95]);
+  });
+
+  it('returns has_gaps=false when all points are within 5 minutes of each other', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const locationRows = [
+      { lat: 31.95, lng: 35.91, captured_at: '2026-04-20T08:00:00.000Z' },
+      { lat: 31.96, lng: 35.92, captured_at: '2026-04-20T08:04:00.000Z' }, // 4 min gap
+    ];
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(makeChain({}, { data: locationRows, error: null })));
+
+    const res = await makeApp().request(`/trips/${V_TRIP}/track`, { headers: authHeader() });
+    const body = await res.json() as { data: { has_gaps: boolean } };
+    expect(body.data.has_gaps).toBe(false);
+  });
+
+  it('returns has_gaps=true when consecutive points are more than 5 minutes apart', async () => {
+    mockAuthUser('engineer');
+    mockUserProfile();
+    const locationRows = [
+      { lat: 31.95, lng: 35.91, captured_at: '2026-04-20T08:00:00.000Z' },
+      { lat: 31.96, lng: 35.92, captured_at: '2026-04-20T08:06:00.000Z' }, // 6 min gap
+    ];
+    vi.mocked(supabaseAdmin.from).mockReturnValue(from(makeChain({}, { data: locationRows, error: null })));
+
+    const res = await makeApp().request(`/trips/${V_TRIP}/track`, { headers: authHeader() });
+    const body = await res.json() as { data: { has_gaps: boolean } };
+    expect(body.data.has_gaps).toBe(true);
+  });
+
+  it('returns has_gaps=false for a single location point', async () => {
+    mockAuthUser('admin');
+    mockUserProfile();
+    vi.mocked(supabaseAdmin.from).mockReturnValue(
+      from(makeChain({}, { data: [{ lat: 31.95, lng: 35.91, captured_at: '2026-04-20T08:00:00.000Z' }], error: null }))
+    );
+
+    const res = await makeApp().request(`/trips/${V_TRIP}/track`, { headers: authHeader() });
+    const body = await res.json() as { data: { has_gaps: boolean } };
+    expect(body.data.has_gaps).toBe(false);
   });
 });
 
@@ -374,6 +414,48 @@ describe('GET /trips/:id/track', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe('POST /trips/:id/end', () => {
+  it('returns 422 when only lat is provided without lng', async () => {
+    mockAuthUser('driver');
+    mockUserProfile();
+    const res = await makeApp().request(`/trips/${V_TRIP}/end`, {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: 31.95 }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('returns 422 when only lng is provided without lat', async () => {
+    mockAuthUser('driver');
+    mockUserProfile();
+    const res = await makeApp().request(`/trips/${V_TRIP}/end`, {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lng: 35.91 }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('accepts empty body when GPS is unavailable', async () => {
+    mockAuthUser('driver');
+    mockUserProfile();
+    const closedTrip = { ...MOCK_TRIP, end_time: '2026-04-20T16:00:00.000Z', permit_id: V2 };
+
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(from(makeChain({}, { count: 0, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: closedTrip, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: [], error: null })))
+      .mockReturnValueOnce(from(makeChain({}, { data: null, error: null })));
+
+    const res = await makeApp().request(`/trips/${V_TRIP}/end`, {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+  });
+
   it('returns 403 for engineer', async () => {
     mockAuthUser('engineer');
     mockUserProfile();

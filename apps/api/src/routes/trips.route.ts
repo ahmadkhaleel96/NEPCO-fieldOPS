@@ -1,6 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
-import { StartTripSchema, PostTripLocationsSchema } from '@fieldops/shared';
+import { StartTripSchema, PostTripLocationsSchema, EndTripSchema, GPS_GAP_THRESHOLD_S } from '@fieldops/shared';
 import { authMiddleware, requireRole, type AuthVariables } from '../middleware/auth.middleware';
 import { supabaseAdmin } from '../lib/supabase';
 import { validateUuid } from '../lib/validate-uuid';
@@ -194,14 +194,22 @@ tripsRoutes.get('/:id/track', requireRole('admin', 'engineer'), async (c) => {
 
   if (error) throw new HTTPException(500, { message: error.message });
 
-  const coordinates = (locations ?? []).map((l: { lng: number; lat: number }) => [l.lng, l.lat]);
+  const locs = (locations ?? []) as Array<{ lat: number; lng: number; captured_at: string }>;
+  const coordinates = locs.map((l) => [l.lng, l.lat]);
+
+  const GAP_MS = GPS_GAP_THRESHOLD_S * 1000;
+  let hasGaps = false;
+  for (let i = 1; i < locs.length; i++) {
+    const delta = new Date(locs[i].captured_at).getTime() - new Date(locs[i - 1].captured_at).getTime();
+    if (delta > GAP_MS) { hasGaps = true; break; }
+  }
 
   return c.json({
     success: true,
     data: {
       type: 'LineString',
       coordinates,
-      has_gaps: false,
+      has_gaps: hasGaps,
     },
   });
 });
@@ -211,9 +219,26 @@ tripsRoutes.post('/:id/end', requireRole('driver', 'admin'), async (c) => {
   const tripId = c.req.param('id');
   validateUuid(tripId);
 
-  const body = await c.req.json().catch(() => {
+  const rawBody = await c.req.json().catch(() => {
     throw new HTTPException(400, { message: 'Invalid JSON body' });
   });
+
+  const parsed = EndTripSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid end-trip data',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      },
+      422
+    );
+  }
+
+  const endBody = parsed.data;
 
   // Check all inspections are submitted (pre-condition from Step 5.1)
   const { count: openCount } = await supabaseAdmin
@@ -232,8 +257,8 @@ tripsRoutes.post('/:id/end', requireRole('driver', 'admin'), async (c) => {
     .from('trips')
     .update({
       end_time: new Date().toISOString(),
-      end_lat: body.lat ?? null,
-      end_lng: body.lng ?? null,
+      end_lat: endBody.lat ?? null,
+      end_lng: endBody.lng ?? null,
     })
     .eq('id', tripId)
     .is('end_time', null)
@@ -261,8 +286,8 @@ tripsRoutes.post('/:id/end', requireRole('driver', 'admin'), async (c) => {
       trip_id: tripId,
       permit_id: closedTrip.permit_id,
       user_id: closedTrip.driver_id,
-      lat: body.lat ?? null,
-      lng: body.lng ?? null,
+      lat: endBody.lat ?? null,
+      lng: endBody.lng ?? null,
       client_id: crypto.randomUUID(),
       client_timestamp: new Date().toISOString(),
     });
