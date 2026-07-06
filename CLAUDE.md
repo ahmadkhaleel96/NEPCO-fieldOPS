@@ -217,17 +217,17 @@ All responses follow:
 
 ## Build Plan Phases
 
-| Phase | Status      | Description                                                      |
-| ----- | ----------- | ---------------------------------------------------------------- | --- |
-| **0** | ✅ Sprint 0 | Foundation & Security Baseline                                   |
-| **1** | 🔜 Next     | Core Data & Identity (users, assets, vehicles, NFC provisioning) |
-| **2** | Pending     | Permit Workflow (create, notifications, withdrawal)              |
-| **3** | Pending     | Field Operations: NFC + GPS                                      |
-| **4** | Pending     | Inspection Submission & Engineer Approval                        |
-| **5** | Pending     | Trip Closure & Data Sealing                                      |
-| **6** | Pending     | Reporting Engine & Three-Copy Fallback                           |
-| **7** | Parallel    | Security Hardening & Audit                                       |
-| **8** | Parallel    | Deployment & Operations                                          | 22  |
+| Phase | Status | Description                                                      |
+| ----- | ------ | ---------------------------------------------------------------- |
+| **0** | ✅     | Foundation & Security Baseline                                   |
+| **1** | ✅     | Core Data & Identity (users, assets, vehicles, NFC provisioning) |
+| **2** | ✅     | Permit Workflow (create, notifications, withdrawal)              |
+| **3** | ✅     | Field Operations: NFC + GPS                                      |
+| **4** | ✅     | Inspection Submission & Engineer Approval                        |
+| **5** | ✅     | Trip Closure & Data Sealing                                      |
+| **6** | ✅     | Reporting Engine & Three-Copy Fallback                           |
+| **7** | ✅     | Security Hardening & Audit                                       |
+| **8** | ✅     | Deployment & Operations                                          |
 
 Full build plan: see `plan.pdf` (provided by project owner).
 
